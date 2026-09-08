@@ -359,4 +359,69 @@ describe("MailProbe-Worker 全功能测试", () => {
     expect(logsAfter2[0].isRepeat).toBe(true);
     expect(logsAfter2[0].visitCount).toBe(2);
   });
+
+  it("同一设备连按 F5（即使因隐私模式未带 If-None-Match），也能根据环境特征稳定识别为同一设备与回访", async () => {
+    const env: Env = {
+      MAILPROBE_KV: mockKV
+    };
+
+    const probe: ProbeMetadata = {
+      id: "probe_f5_test",
+      filename: "f5_test.png",
+      note: "F5连按测试",
+      backend: "r2",
+      contentType: "image/png",
+      createdAt: new Date().toISOString(),
+      hits: 0
+    };
+    await mockKV.put("probe:probe_f5_test", JSON.stringify(probe));
+
+    const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0";
+    const ip = "183.232.100.1";
+
+    let firstFp = "";
+    // 模拟连按 3 次 F5
+    for (let i = 1; i <= 3; i++) {
+      const waitUntilMock = vi.fn();
+      const req = new Request("https://mailprobe.example.com/i/probe_f5_test.png", {
+        headers: {
+          "User-Agent": ua,
+          "CF-Connecting-IP": ip,
+          "Accept-Language": "zh-CN,zh;q=0.9"
+        }
+      });
+
+      const res = await worker.fetch(req, env, { waitUntil: waitUntilMock } as any);
+      expect(res.status).toBe(200);
+      const etag = res.headers.get("etag");
+      expect(etag).toMatch(/^"dev_[0-9a-f]{16}"$/);
+
+      if (i === 1) {
+        firstFp = etag!;
+      } else {
+        // 验证 3 次计算出的设备指纹 100% 完全相同，绝不随机漂移！
+        expect(etag).toBe(firstFp);
+      }
+
+      expect(waitUntilMock).toHaveBeenCalled();
+      await waitUntilMock.mock.calls[0][0];
+    }
+
+    const logs = JSON.parse(await mockKV.get("logs:recent"));
+    expect(logs.length).toBe(3);
+    // 3 次均为同一指纹
+    expect(logs[0].deviceFp).toBe(firstFp.replace(/"/g, ""));
+    expect(logs[1].deviceFp).toBe(firstFp.replace(/"/g, ""));
+    expect(logs[2].deviceFp).toBe(firstFp.replace(/"/g, ""));
+
+    // 验证后续两次成功识别为回访与递增计数
+    expect(logs[0].visitCount).toBe(3);
+    expect(logs[0].isRepeat).toBe(true);
+
+    expect(logs[1].visitCount).toBe(2);
+    expect(logs[1].isRepeat).toBe(true);
+
+    expect(logs[2].visitCount).toBe(1);
+    expect(logs[2].isRepeat).toBe(false);
+  });
 });

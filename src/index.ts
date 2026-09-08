@@ -1,7 +1,7 @@
 import { Env, ProbeMetadata, ProbeTriggerLog, StorageBackendType } from "./types";
 import { parseUserAgent, sendDingTalkAlert } from "./dingtalk";
 import { lookupIpWithPrism } from "./ipprism";
-import { resolveDeviceFingerprint } from "./fingerprint";
+import { resolveDeviceFingerprint, extractDeviceFpFromIfNoneMatch } from "./fingerprint";
 import { uploadToMjj } from "./storage/mjj";
 import { uploadToR2 } from "./storage/r2";
 import { renderHtml } from "./ui/index";
@@ -422,17 +422,20 @@ export default {
         })()
       );
 
-      // 核心防客户端与中间代理缓存响应头（保证收件人每次打开邮件都会发起真实 HTTP 请求）
-      // 同时通过 ETag 下发当前设备的专属 16 位状态追踪令牌
+      // 核心防客户端与中间代理缓存响应头：
+      // 使用 no-cache + must-revalidate + max-age=0 强制浏览器与邮件客户端每次访问都必须向 Worker 发送条件请求校验，
+      // 同时避免 no-store 导致现代浏览器（如 Edge/Chrome/Safari）拒绝保存并回传 ETag 指纹状态锁。
       const antiCacheHeaders: Record<string, string> = {
-        "Cache-Control": "no-cache, no-store, must-revalidate, proxy-revalidate, max-age=0",
+        "Cache-Control": "no-cache, must-revalidate, max-age=0",
         "Pragma": "no-cache",
         "Expires": "0",
         "ETag": `"${deviceFp}"`
       };
 
       const ifNoneMatch = request.headers.get("if-none-match");
-      const cleanIfNoneMatch = ifNoneMatch?.replace(/^W\//, "").replace(/"/g, "").trim();
+      const extractedDevFp = extractDeviceFpFromIfNoneMatch(ifNoneMatch);
+      const cleanIfNoneMatch = ifNoneMatch?.replace(/^W\//i, "").replace(/"/g, "").trim();
+      const isDevMatch = Boolean((extractedDevFp && extractedDevFp === deviceFp) || (cleanIfNoneMatch && cleanIfNoneMatch === deviceFp));
 
       // 1. R2 存储（流式 zero-copy 管道与边缘 Cache API）
       if (probe?.backend === "r2" && probe.r2Key && env.MAILPROBE_R2) {
@@ -451,7 +454,7 @@ export default {
             if (cachedRes) {
               const cachedEtag = cachedRes.headers.get("etag");
               // 客户端命中设备令牌或底层 ETag，在日志已完整记录前提下极速返回 304 (0 字节负载)
-              if (cleanIfNoneMatch && (cleanIfNoneMatch === deviceFp || cleanIfNoneMatch === cachedEtag?.replace(/"/g, ""))) {
+              if (isDevMatch || (cleanIfNoneMatch && cleanIfNoneMatch === cachedEtag?.replace(/"/g, ""))) {
                 return new Response(null, {
                   status: 304,
                   headers: {
@@ -478,7 +481,7 @@ export default {
         if (object) {
           const r2Etag = object.httpEtag;
           // 首次穿透 R2 物理存储命中设备令牌或 ETag 304
-          if (cleanIfNoneMatch && (cleanIfNoneMatch === deviceFp || cleanIfNoneMatch === r2Etag?.replace(/"/g, "")) && !isDownload) {
+          if ((isDevMatch || (cleanIfNoneMatch && cleanIfNoneMatch === r2Etag?.replace(/"/g, ""))) && !isDownload) {
             return new Response(null, {
               status: 304,
               headers: {
@@ -532,7 +535,7 @@ export default {
           if (originRes.ok && originRes.body) {
             const originEtag = originRes.headers.get("etag");
             // mjj.today 同样支持命中设备令牌或图床 ETag 304 快速回执
-            if (cleanIfNoneMatch && (cleanIfNoneMatch === deviceFp || cleanIfNoneMatch === originEtag?.replace(/"/g, "")) && !isDownload) {
+            if ((isDevMatch || (cleanIfNoneMatch && cleanIfNoneMatch === originEtag?.replace(/"/g, ""))) && !isDownload) {
               return new Response(null, {
                 status: 304,
                 headers: {
@@ -560,7 +563,7 @@ export default {
       }
 
       // 3. 兜底回退：返回 1x1 像素透明 GIF (依然带入 304 状态与指纹)
-      if (cleanIfNoneMatch && cleanIfNoneMatch === deviceFp && !isDownload) {
+      if (isDevMatch && !isDownload) {
         return new Response(null, {
           status: 304,
           headers: {

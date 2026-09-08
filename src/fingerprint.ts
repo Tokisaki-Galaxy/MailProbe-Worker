@@ -55,9 +55,21 @@ export interface ResolvedFingerprint {
 }
 
 /**
+ * 从 If-None-Match 请求头中安全提取 16 位设备指纹 dev_<16hex>
+ * 兼容 W/ 弱标记、双引号、多 ETag 逗号列表等规范格式
+ */
+export function extractDeviceFpFromIfNoneMatch(ifNoneMatchHeader: string | null): string | null {
+  if (!ifNoneMatchHeader) return null;
+  const match = ifNoneMatchHeader.match(/dev_[0-9a-f]{16}/i);
+  return match ? match[0].toLowerCase() : null;
+}
+
+/**
  * 解析并确定设备的最终指纹
- * 1. 优先校验客户端是否带回了合法的 dev_<16hex> ETag 状态锁；
- * 2. 若未带回（首次访问），则基于探针ID、环境特征、随机盐与时间戳派发新的 16 位设备指纹。
+ * 1. 优先校验客户端是否带回了 If-None-Match 中的 dev_<16hex> ETag 状态锁；
+ * 2. 若未带回（首次访问，或客户端未携带缓存）：
+ *    基于 (客户端环境特征 clientFp + 客户端 IP) 计算确定性的设备基础哈希。
+ *    杜绝随机数/时间戳漂移，确保同一台设备连按 F5 时计算出的指纹 100% 绝对稳定！
  */
 export async function resolveDeviceFingerprint(
   request: Request,
@@ -67,25 +79,25 @@ export async function resolveDeviceFingerprint(
   const clientHash = await compute16HexHash(factors);
   const clientFp = `env_${clientHash}`;
 
-  // 检查客户端回传的 If-None-Match
-  const rawIfNoneMatch = request.headers.get("if-none-match") || "";
-  // 规整去引号及 W/ 弱验证符，匹配 dev_<16位hex>
-  const cleanEtag = rawIfNoneMatch.replace(/^W\//, "").replace(/"/g, "").trim();
+  const ip = request.headers.get("cf-connecting-ip") || "127.0.0.1";
 
-  const devFpRegex = /^dev_[0-9a-f]{16}$/i;
-  if (cleanEtag && devFpRegex.test(cleanEtag)) {
-    // 成功命中客户端缓存回传的既有设备指纹
+  // 1. 优先检查客户端是否回传了既有设备指纹
+  const rawIfNoneMatch = request.headers.get("if-none-match");
+  const extractedFp = extractDeviceFpFromIfNoneMatch(rawIfNoneMatch);
+
+  if (extractedFp) {
     return {
-      deviceFp: cleanEtag.toLowerCase(),
+      deviceFp: extractedFp,
       clientFp,
       isRepeat: true
     };
   }
 
-  // 首次访问或未携带合法标识：动态生成新的 16 位设备指纹
-  const randomSalt = crypto.randomUUID();
-  const seed = `${probeId}:${clientFp}:${randomSalt}:${Date.now()}`;
-  const deviceHash = await compute16HexHash(seed);
+  // 2. 首次访问或未携带 ETag：计算确定性的基础设备指纹
+  // 采用 clientFp (UA+Accept+Sec-CH-UA+协议特征) 结合 IP，
+  // 确保同 IP 同浏览器在任何情况下都不会生成飘移的假指纹
+  const baseSeed = `${clientFp}||${ip}`;
+  const deviceHash = await compute16HexHash(baseSeed);
   const deviceFp = `dev_${deviceHash}`;
 
   return {
