@@ -234,43 +234,11 @@ export default {
       const referer = request.headers.get("referer") || undefined;
 
       // 默认 Cloudflare 原生定位
-      let country = (request.cf?.country as string) || "未知";
-      let region = (request.cf?.region as string) || "未知";
-      let city = (request.cf?.city as string) || "未知";
-      let isp = (request.cf?.asOrganization as string) || "未知运营商";
+      const cfCountry = (request.cf?.country as string) || "未知";
+      const cfRegion = (request.cf?.region as string) || "未知";
+      const cfCity = (request.cf?.city as string) || "未知";
+      const cfIsp = (request.cf?.asOrganization as string) || "未知运营商";
       const asn = request.cf?.asn as number | undefined;
-      let locationSummary = `${country} · ${region} · ${city}`;
-      let provider = "Cloudflare 原生";
-      const providersList: Array<{ name: string; location: string; isp?: string }> = [];
-
-      const cfLoc = [country, region, city].filter(c => c && c !== "未知").join(" · ");
-      if (cfLoc) {
-        providersList.push({
-          name: "Cloudflare 边缘",
-          location: cfLoc,
-          isp: isp !== "未知运营商" ? (asn ? `${isp} (AS${asn})` : isp) : (asn ? `AS${asn}` : undefined)
-        });
-      }
-
-      // 如果配置了 ip-prism，尝试高精度多源解析
-      if (env.IP_PRISM_URL && env.IP_PRISM_KEY) {
-        try {
-          const prismRes = await lookupIpWithPrism(env.IP_PRISM_URL, env.IP_PRISM_KEY, ip);
-          if (prismRes.success) {
-            if (prismRes.country) country = prismRes.country;
-            if (prismRes.region) region = prismRes.region;
-            if (prismRes.city) city = prismRes.city;
-            if (prismRes.isp) isp = prismRes.isp;
-            if (prismRes.location) locationSummary = prismRes.location;
-            provider = "ip-prism";
-            if (prismRes.providers && prismRes.providers.length > 0) {
-              providersList.push(...prismRes.providers);
-            }
-          }
-        } catch (e) {
-          // 优雅降级保持原生数据
-        }
-      }
 
       const uaParsed = parseUserAgent(userAgent);
       const clientType = `${uaParsed.os} · ${uaParsed.client}`;
@@ -287,10 +255,49 @@ export default {
         hour12: false
       }).format(now);
 
-      // 异步记录历史日志与更新点击计数
-      if (env.MAILPROBE_KV) {
-        ctx.waitUntil(
-          (async () => {
+      // 【核心极致性能优化】：将 ip-prism 外部网络请求、多源解析、KV 日志持久化和钉钉告警
+      // 全部移入 ctx.waitUntil 后台并行执行，图片响应 0 毫秒阻塞，彻底解决加载等待！
+      ctx.waitUntil(
+        (async () => {
+          let country = cfCountry;
+          let region = cfRegion;
+          let city = cfCity;
+          let isp = cfIsp;
+          let locationSummary = `${country} · ${region} · ${city}`;
+          let provider = "Cloudflare 原生";
+          const providersList: Array<{ name: string; location: string; isp?: string }> = [];
+
+          const cfLoc = [cfCountry, cfRegion, cfCity].filter(c => c && c !== "未知").join(" · ");
+          if (cfLoc) {
+            providersList.push({
+              name: "Cloudflare 边缘",
+              location: cfLoc,
+              isp: cfIsp !== "未知运营商" ? (asn ? `${cfIsp} (AS${asn})` : cfIsp) : (asn ? `AS${asn}` : undefined)
+            });
+          }
+
+          // 异步高精度多源解析
+          if (env.IP_PRISM_URL && env.IP_PRISM_KEY) {
+            try {
+              const prismRes = await lookupIpWithPrism(env.IP_PRISM_URL, env.IP_PRISM_KEY, ip);
+              if (prismRes.success) {
+                if (prismRes.country) country = prismRes.country;
+                if (prismRes.region) region = prismRes.region;
+                if (prismRes.city) city = prismRes.city;
+                if (prismRes.isp) isp = prismRes.isp;
+                if (prismRes.location) locationSummary = prismRes.location;
+                provider = "ip-prism";
+                if (prismRes.providers && prismRes.providers.length > 0) {
+                  providersList.push(...prismRes.providers);
+                }
+              }
+            } catch (e) {
+              // 优雅降级保持原生数据
+            }
+          }
+
+          // 异步记录历史日志与更新点击计数
+          if (env.MAILPROBE_KV) {
             try {
               const rawLogs = await env.MAILPROBE_KV.get("logs:recent");
               const logs: ProbeTriggerLog[] = rawLogs ? JSON.parse(rawLogs) : [];
@@ -324,45 +331,93 @@ export default {
             } catch (e) {
               console.error("记录日志失败", e);
             }
-          })()
-        );
-      }
+          }
 
-      // 异步发送钉钉加签告警
-      if (env.DINGTALK_WEBHOOK && env.DINGTALK_SECRET) {
-        const alertData = {
-          note: probe?.note || "无备注探针",
-          filename: probe?.filename || `${probeId}.png`,
-          ip,
-          location: locationSummary,
-          isp: asn && !isp.includes("AS") ? `${isp} (AS${asn})` : isp,
-          userAgent,
-          clientType,
-          timeStr,
-          isDownload,
-          provider,
-          providers: providersList.length > 0 ? providersList : undefined
-        };
+          // 异步发送钉钉加签告警
+          if (env.DINGTALK_WEBHOOK && env.DINGTALK_SECRET) {
+            const alertData = {
+              note: probe?.note || "无备注探针",
+              filename: probe?.filename || `${probeId}.png`,
+              ip,
+              location: locationSummary,
+              isp: asn && !isp.includes("AS") ? `${isp} (AS${asn})` : isp,
+              userAgent,
+              clientType,
+              timeStr,
+              isDownload,
+              provider,
+              providers: providersList.length > 0 ? providersList : undefined
+            };
 
-        ctx.waitUntil(
-          sendDingTalkAlert(env.DINGTALK_WEBHOOK, env.DINGTALK_SECRET, alertData)
-        );
-      }
+            await sendDingTalkAlert(env.DINGTALK_WEBHOOK, env.DINGTALK_SECRET, alertData);
+          }
+        })()
+      );
 
-      // 核心防缓存响应头
+      // 核心防客户端与中间代理缓存响应头（保证收件人每次打开邮件都会触发新请求）
       const antiCacheHeaders = {
         "Cache-Control": "no-cache, no-store, must-revalidate, proxy-revalidate, max-age=0",
         "Pragma": "no-cache",
         "Expires": "0"
       };
 
-      // 1. R2 存储
+      // 1. R2 存储（支持 Cloudflare 边缘 Cache API 极速加速）
       if (probe?.backend === "r2" && probe.r2Key && env.MAILPROBE_R2) {
+        // 尝试从边缘 Cache 中读取（若处于 Node 测试环境则容错跳过）
+        const cacheKey = `https://r2-internal-cache.mailprobe.local/${probe.r2Key}`;
+        let cache: Cache | null = null;
+        try {
+          if (typeof caches !== "undefined" && caches.default) {
+            cache = caches.default;
+          }
+        } catch (e) {}
+
+        if (cache && !isDownload) {
+          try {
+            const cachedRes = await cache.match(cacheKey);
+            if (cachedRes) {
+              const resHeaders = new Headers(cachedRes.headers);
+              for (const [k, v] of Object.entries(antiCacheHeaders)) {
+                resHeaders.set(k, v);
+              }
+              resHeaders.set("X-MailProbe-Cache", "HIT");
+              return new Response(cachedRes.body, {
+                status: 200,
+                headers: resHeaders
+              });
+            }
+          } catch (e) {}
+        }
+
         const object = await env.MAILPROBE_R2.get(probe.r2Key);
         if (object) {
           const headers = new Headers();
           object.writeHttpMetadata(headers);
-          headers.set("etag", object.httpEtag);
+          if (object.httpEtag) {
+            headers.set("etag", object.httpEtag);
+          }
+
+          // 如果支持缓存，写入当前边缘节点的 Cache API
+          if (cache && !isDownload) {
+            try {
+              const buffer = await object.arrayBuffer();
+              const toCacheRes = new Response(buffer, {
+                headers: {
+                  "Content-Type": headers.get("Content-Type") || "image/png",
+                  "Cache-Control": "public, max-age=86400"
+                }
+              });
+              ctx.waitUntil(cache.put(cacheKey, toCacheRes));
+
+              // 组装返回给客户端的防缓存响应
+              for (const [k, v] of Object.entries(antiCacheHeaders)) {
+                headers.set(k, v);
+              }
+              headers.set("X-MailProbe-Cache", "MISS");
+              return new Response(buffer, { headers });
+            } catch (e) {}
+          }
+
           for (const [k, v] of Object.entries(antiCacheHeaders)) {
             headers.set(k, v);
           }
