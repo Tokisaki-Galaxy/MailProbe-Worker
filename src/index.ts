@@ -1,6 +1,7 @@
 import { Env, ProbeMetadata, ProbeTriggerLog, StorageBackendType } from "./types";
 import { parseUserAgent, sendDingTalkAlert } from "./dingtalk";
 import { lookupIpWithPrism } from "./ipprism";
+import { resolveDeviceFingerprint } from "./fingerprint";
 import { uploadToMjj } from "./storage/mjj";
 import { uploadToR2 } from "./storage/r2";
 import { renderHtml } from "./ui/index";
@@ -284,6 +285,10 @@ export default {
       const cfIsp = (request.cf?.asOrganization as string) || "未知运营商";
       const asn = request.cf?.asn as number | undefined;
 
+      // 解析免 JS 客户端环境哈希与 16 位设备指纹状态锁
+      const fpResult = await resolveDeviceFingerprint(request, probeId || "unknown");
+      const { deviceFp, clientFp, isRepeat: isCachedDevice } = fpResult;
+
       const uaParsed = parseUserAgent(userAgent);
       const clientType = `${uaParsed.os} · ${uaParsed.client}`;
 
@@ -340,11 +345,22 @@ export default {
             }
           }
 
+          let visitCount = 1;
+          let isRepeat = isCachedDevice;
+
           // 异步记录历史日志与更新点击计数
           if (env.MAILPROBE_KV) {
             try {
               const rawLogs = await env.MAILPROBE_KV.get("logs:recent");
               const logs: ProbeTriggerLog[] = rawLogs ? JSON.parse(rawLogs) : [];
+
+              // 统计该探针下该设备的历史出现频次
+              const prevHits = logs.filter(l => l.probeId === probeId && l.deviceFp === deviceFp).length;
+              visitCount = prevHits + 1;
+              if (prevHits > 0) {
+                isRepeat = true;
+              }
+
               const newLog: ProbeTriggerLog = {
                 logId: crypto.randomUUID(),
                 probeId: probeId || "unknown",
@@ -362,7 +378,11 @@ export default {
                 timestamp: timeStr,
                 isDownload,
                 provider,
-                providers: providersList.length > 0 ? providersList : undefined
+                providers: providersList.length > 0 ? providersList : undefined,
+                deviceFp,
+                clientFp,
+                visitCount,
+                isRepeat
               };
               logs.unshift(newLog);
               await env.MAILPROBE_KV.put("logs:recent", JSON.stringify(logs.slice(0, 100)));
@@ -390,7 +410,11 @@ export default {
               timeStr,
               isDownload,
               provider,
-              providers: providersList.length > 0 ? providersList : undefined
+              providers: providersList.length > 0 ? providersList : undefined,
+              deviceFp,
+              clientFp,
+              visitCount,
+              isRepeat
             };
 
             await sendDingTalkAlert(env.DINGTALK_WEBHOOK, env.DINGTALK_SECRET, alertData);
@@ -399,13 +423,16 @@ export default {
       );
 
       // 核心防客户端与中间代理缓存响应头（保证收件人每次打开邮件都会发起真实 HTTP 请求）
+      // 同时通过 ETag 下发当前设备的专属 16 位状态追踪令牌
       const antiCacheHeaders: Record<string, string> = {
         "Cache-Control": "no-cache, no-store, must-revalidate, proxy-revalidate, max-age=0",
         "Pragma": "no-cache",
-        "Expires": "0"
+        "Expires": "0",
+        "ETag": `"${deviceFp}"`
       };
 
       const ifNoneMatch = request.headers.get("if-none-match");
+      const cleanIfNoneMatch = ifNoneMatch?.replace(/^W\//, "").replace(/"/g, "").trim();
 
       // 1. R2 存储（流式 zero-copy 管道与边缘 Cache API）
       if (probe?.backend === "r2" && probe.r2Key && env.MAILPROBE_R2) {
@@ -422,13 +449,12 @@ export default {
           try {
             const cachedRes = await cache.match(cacheKey);
             if (cachedRes) {
-              const etag = cachedRes.headers.get("etag");
-              // 客户端命中 ETag，在日志已完整记录前提下极速返回 304 (0 字节负载)
-              if (ifNoneMatch && etag && ifNoneMatch === etag) {
+              const cachedEtag = cachedRes.headers.get("etag");
+              // 客户端命中设备令牌或底层 ETag，在日志已完整记录前提下极速返回 304 (0 字节负载)
+              if (cleanIfNoneMatch && (cleanIfNoneMatch === deviceFp || cleanIfNoneMatch === cachedEtag?.replace(/"/g, ""))) {
                 return new Response(null, {
                   status: 304,
                   headers: {
-                    etag,
                     ...antiCacheHeaders,
                     "X-MailProbe-Cache": "HIT-304"
                   }
@@ -450,13 +476,12 @@ export default {
 
         const object = await env.MAILPROBE_R2.get(probe.r2Key);
         if (object) {
-          const etag = object.httpEtag;
-          // 首次穿透 R2 物理存储命中 ETag 304
-          if (ifNoneMatch && etag && ifNoneMatch === etag && !isDownload) {
+          const r2Etag = object.httpEtag;
+          // 首次穿透 R2 物理存储命中设备令牌或 ETag 304
+          if (cleanIfNoneMatch && (cleanIfNoneMatch === deviceFp || cleanIfNoneMatch === r2Etag?.replace(/"/g, "")) && !isDownload) {
             return new Response(null, {
               status: 304,
               headers: {
-                etag,
                 ...antiCacheHeaders,
                 "X-MailProbe-Cache": "MISS-304"
               }
@@ -465,9 +490,6 @@ export default {
 
           const headers = new Headers();
           object.writeHttpMetadata(headers);
-          if (etag) {
-            headers.set("etag", etag);
-          }
 
           // 用 ReadableStream.tee() 零拷贝纯流式管道，避免 arrayBuffer 堆内存拷贝与阻塞
           if (cache && !isDownload && object.body) {
@@ -475,6 +497,7 @@ export default {
               const [streamForClient, streamForCache] = object.body.tee();
               const cacheHeaders = new Headers(headers);
               cacheHeaders.set("Cache-Control", "public, max-age=86400");
+              if (r2Etag) cacheHeaders.set("etag", r2Etag);
               const toCacheRes = new Response(streamForCache, { headers: cacheHeaders });
               ctx.waitUntil(cache.put(cacheKey, toCacheRes));
 
@@ -507,13 +530,12 @@ export default {
             }
           });
           if (originRes.ok && originRes.body) {
-            const etag = originRes.headers.get("etag");
-            // mjj.today 同样支持 ETag 304 快速回执
-            if (ifNoneMatch && etag && ifNoneMatch === etag && !isDownload) {
+            const originEtag = originRes.headers.get("etag");
+            // mjj.today 同样支持命中设备令牌或图床 ETag 304 快速回执
+            if (cleanIfNoneMatch && (cleanIfNoneMatch === deviceFp || cleanIfNoneMatch === originEtag?.replace(/"/g, "")) && !isDownload) {
               return new Response(null, {
                 status: 304,
                 headers: {
-                  etag,
                   ...antiCacheHeaders,
                   "X-MailProbe-Cache": "PROXY-304"
                 }
@@ -537,7 +559,17 @@ export default {
         }
       }
 
-      // 3. 兜底回退：返回 1x1 像素透明 GIF
+      // 3. 兜底回退：返回 1x1 像素透明 GIF (依然带入 304 状态与指纹)
+      if (cleanIfNoneMatch && cleanIfNoneMatch === deviceFp && !isDownload) {
+        return new Response(null, {
+          status: 304,
+          headers: {
+            ...antiCacheHeaders,
+            "X-MailProbe-Cache": "GIF-304"
+          }
+        });
+      }
+
       return new Response(TRANSPARENT_GIF_BYTES, {
         status: 200,
         headers: {

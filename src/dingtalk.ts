@@ -77,6 +77,15 @@ export async function sendDingTalkAlert(
       multiProvidersLine = `\n- **多源对比**：\n  > ${summaryList.join("  \n  > ")}`;
     }
 
+    // 格式化 16 位设备指纹与回访标识
+    let deviceFpLine = "";
+    if (data.deviceFp) {
+      const repeatTag = data.isRepeat
+        ? `⚠️ **同一设备回访 (第 ${data.visitCount || 2} 次阅读)**`
+        : "新设备首次访问";
+      deviceFpLine = `\n- **设备指纹**：\`${data.deviceFp}\` (${repeatTag})`;
+    }
+
     const markdownText = `### ${title}
 ---
 - **探针备注**：${data.note || "未设置备注"}
@@ -84,7 +93,7 @@ export async function sendDingTalkAlert(
 - **来源 IP**：\`${data.ip}\`
 - **地理位置**：${data.location}${providerText}${multiProvidersLine}
 - **网络运营商**：${data.isp}
-- **设备环境**：${data.clientType}
+- **设备环境**：${data.clientType}${deviceFpLine}
 - **触发时间**：${data.timeStr}
 - **User-Agent**：
   > \`${data.userAgent.substring(0, 300)}\`

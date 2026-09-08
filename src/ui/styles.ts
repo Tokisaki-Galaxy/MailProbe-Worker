@@ -270,6 +270,27 @@ export const styles = `
       border: 1px solid #e2e8f0;
     }
 
+    .badge-fp {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.65rem;
+      padding: 0.12rem 0.35rem;
+      border-radius: 4px;
+      font-weight: 500;
+      background: #f8fafc;
+      color: #475569;
+      border: 1px solid #e2e8f0;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      cursor: help;
+    }
+
+    .badge-fp-repeat {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border-color: #bfdbfe;
+    }
+
     .dropzone {
       border: 1.5px dashed #cbd5e1;
       border-radius: 10px;

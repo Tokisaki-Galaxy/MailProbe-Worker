@@ -286,13 +286,23 @@ export const scripts = `
             locationHtml += ' <button class="btn-compare" onclick="openProvidersModal(' + index + ')">多源 (' + log.providers.length + ')</button>';
           }
 
+          let clientHtml = '<span style="color:var(--text-main); font-size:12px;">' + escapeHtml(log.clientType) + '</span>';
+          if (log.deviceFp) {
+            const shortDev = escapeHtml(log.deviceFp.replace('dev_', ''));
+            const isRep = log.isRepeat;
+            const repText = log.visitCount && log.visitCount > 1 ? ' · #' + log.visitCount : (isRep ? ' · 回访' : '');
+            const fpClass = isRep ? 'badge-fp badge-fp-repeat' : 'badge-fp';
+            const titleTip = '16位设备标识: ' + log.deviceFp + (log.clientFp ? '\n环境指纹: ' + log.clientFp : '');
+            clientHtml += '<br><span class="' + fpClass + '" title="' + escapeHtml(titleTip) + '"><span>dev_' + shortDev.substring(0, 8) + '</span>' + repText + '</span>';
+          }
+
           return '<tr>' +
             '<td style="white-space:nowrap; font-family:var(--font-mono); font-size:12px;">' + (log.timestamp || '-') + '</td>' +
             '<td><strong style="color:var(--text-main);">' + (escapeHtml(log.note) || '无备注') + '</strong><br><span style="font-size:0.75rem;color:var(--text-dim);">' + escapeHtml(log.filename) + '</span></td>' +
             '<td><span class="tag tag-ip">' + log.ip + '</span></td>' +
             '<td><span class="tag tag-location">' + locationHtml + '</span></td>' +
             '<td>' + escapeHtml(log.isp || '未知') + '</td>' +
-            '<td><span style="color:var(--text-main); font-size:12px;">' + escapeHtml(log.clientType) + '</span></td>' +
+            '<td>' + clientHtml + '</td>' +
           '</tr>';
         }).join('');
       } catch (err) {

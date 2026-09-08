@@ -49,6 +49,10 @@ export interface ProbeTriggerLog {
   isDownload: boolean;
   provider?: string; // "ip-prism" | "cloudflare"
   providers?: IpProviderRecord[]; // 多源 Provider 解析比对列表
+  deviceFp?: string; // 16 位核心设备识别码 (dev_xxxxxxxxxxxxxxxx)
+  clientFp?: string; // 16 位环境特征哈希 (env_xxxxxxxxxxxxxxxx)
+  visitCount?: number; // 该设备针对该探针的历史累计访问次数
+  isRepeat?: boolean; // 是否为同一设备的回访
 }
 
 export interface DingTalkAlertData {
@@ -63,6 +67,10 @@ export interface DingTalkAlertData {
   isDownload: boolean;
   provider?: string;
   providers?: IpProviderRecord[];
+  deviceFp?: string;
+  clientFp?: string;
+  visitCount?: number;
+  isRepeat?: boolean;
 }
 
 export interface IpPrismResult {

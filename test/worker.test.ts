@@ -280,7 +280,8 @@ describe("MailProbe-Worker 全功能测试", () => {
 
     const res = await worker.fetch(req, env, { waitUntil: waitUntilMock } as any);
     expect(res.status).toBe(304);
-    expect(res.headers.get("etag")).toBe(etag);
+    // 验证无论客户端是传统 ETag 还是设备令牌，响应都会规范注入 16 位 dev_xxxxxxxxxxxxxxxx 指纹头
+    expect(res.headers.get("etag")).toMatch(/^"dev_[0-9a-f]{16}"$/);
 
     // 确保异步日志记录仍然照常被触发
     expect(waitUntilMock).toHaveBeenCalled();
@@ -291,5 +292,71 @@ describe("MailProbe-Worker 全功能测试", () => {
     const logs = JSON.parse(rawLogs);
     expect(logs.length).toBe(1);
     expect(logs[0].probeId).toBe("probe_etag");
+  });
+
+  it("支持 16 位设备指纹派发并在携带 If-None-Match 时继承且标记回访", async () => {
+    const env: Env = {
+      MAILPROBE_KV: mockKV
+    };
+
+    const probe: ProbeMetadata = {
+      id: "probe_fp_test",
+      filename: "fp_test.png",
+      note: "指纹追踪测试",
+      backend: "r2",
+      contentType: "image/png",
+      createdAt: new Date().toISOString(),
+      hits: 0
+    };
+    await mockKV.put("probe:probe_fp_test", JSON.stringify(probe));
+
+    // 第一次访问：新设备首次打开
+    const waitUntilMock1 = vi.fn();
+    const req1 = new Request("https://mailprobe.example.com/i/probe_fp_test.png", {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X)",
+        "CF-Connecting-IP": "223.5.5.5"
+      }
+    });
+
+    const res1 = await worker.fetch(req1, env, { waitUntil: waitUntilMock1 } as any);
+    expect(res1.status).toBe(200);
+    const assignedEtag = res1.headers.get("etag");
+    expect(assignedEtag).toBeDefined();
+    // 验证派发了 16 位小写十六进制的 dev_xxxxxxxxxxxxxxxx 指纹令牌
+    expect(assignedEtag).toMatch(/^"dev_[0-9a-f]{16}"$/);
+
+    expect(waitUntilMock1).toHaveBeenCalled();
+    await waitUntilMock1.mock.calls[0][0];
+
+    const logsAfter1 = JSON.parse(await mockKV.get("logs:recent"));
+    expect(logsAfter1[0].deviceFp).toBe(assignedEtag!.replace(/"/g, ""));
+    expect(logsAfter1[0].visitCount).toBe(1);
+    expect(logsAfter1[0].isRepeat).toBe(false);
+
+    // 第二次访问：同一台 iPhone 换了 5G 网络 (IP 变动)，但带回了客户端缓存的 ETag 指纹
+    const waitUntilMock2 = vi.fn();
+    const req2 = new Request("https://mailprobe.example.com/i/probe_fp_test.png", {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X)",
+        "CF-Connecting-IP": "117.136.0.1", // 换了移动 5G IP
+        "If-None-Match": assignedEtag!
+      }
+    });
+
+    const res2 = await worker.fetch(req2, env, { waitUntil: waitUntilMock2 } as any);
+    // 快速命中 304 快速回执
+    expect(res2.status).toBe(304);
+
+    expect(waitUntilMock2).toHaveBeenCalled();
+    await waitUntilMock2.mock.calls[0][0];
+
+    const logsAfter2 = JSON.parse(await mockKV.get("logs:recent"));
+    expect(logsAfter2.length).toBe(2);
+    // 验证第二次访问继承了完全相同的 16 位设备指纹，且成功识别为回访
+    expect(logsAfter2[0].deviceFp).toBe(assignedEtag!.replace(/"/g, ""));
+    expect(logsAfter2[0].ip).toBe("117.136.0.1");
+    expect(logsAfter2[0].isRepeat).toBe(true);
+    expect(logsAfter2[0].visitCount).toBe(2);
   });
 });
