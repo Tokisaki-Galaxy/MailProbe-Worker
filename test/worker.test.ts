@@ -77,6 +77,16 @@ describe("MailProbe-Worker 全功能测试", () => {
     expect(html).toContain("历史上传探针管理");
     expect(html).toContain("探针触发历史记录");
     expect(html).toContain('window.__ADMIN_PREFIX__ = "/admin"');
+
+    // 核心保障：确保前端内嵌的所有 JavaScript 代码通过 V8 语法解析编译，杜绝任何 SyntaxError 导致前端罢工
+    // 核心保障：确保前端内嵌的所有 JavaScript 代码通过 V8 语法解析编译，杜绝任何 SyntaxError 导致前端罢工
+    const scriptMatches = html.match(/<script>([\s\S]*?)<\/script>/gi) || [];
+    expect(scriptMatches.length).toBeGreaterThan(0);
+    const vm = await import("vm");
+    for (const tag of scriptMatches) {
+      const code = tag.replace(/<\/?script>/gi, "");
+      expect(() => new vm.Script(code)).not.toThrow();
+    }
   });
 
   it("GET /admin/api/config 正确返回各项服务可用状态", async () => {

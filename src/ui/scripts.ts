@@ -3,6 +3,7 @@ export const scripts = `
     let selectedFile = null;
     let serverConfig = {};
     let probeToDelete = null;
+    let cachedProbes = [];
     let cachedLogs = [];
 
     function showToast(msg) {
@@ -181,17 +182,15 @@ export const scripts = `
       try {
         const res = await fetch(API_BASE + '/probes');
         const probes = await res.json();
+        cachedProbes = Array.isArray(probes) ? probes : [];
 
-        if (!probes || probes.length === 0) {
+        if (!cachedProbes || cachedProbes.length === 0) {
           tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无已上传探针</td></tr>';
           return;
         }
 
-        tbody.innerHTML = probes.map(p => {
+        tbody.innerHTML = cachedProbes.map((p, index) => {
           const dateStr = p.createdAt ? new Date(p.createdAt).toLocaleString('zh-CN', { hour12: false }) : '-';
-          const extMatch = p.filename.match(/\\.([a-zA-Z0-9]+)$/);
-          const ext = extMatch ? extMatch[1].toLowerCase() : 'png';
-          const probeUrl = window.location.origin + '/i/' + p.id + '.' + ext;
           const backendBadge = p.backend === 'r2' 
             ? '<span class="badge badge-r2">Cloudflare R2</span>' 
             : '<span class="badge badge-mjj">mjj.today</span>';
@@ -204,8 +203,8 @@ export const scripts = `
             '<td><span class="tag tag-ip">' + (p.hits || 0) + ' 次</span></td>' +
             '<td>' +
               '<div style="display:flex; gap:0.4rem;">' +
-                '<button class="btn-secondary" onclick="viewProbeCode(\\'' + probeUrl + '\\', \\'' + escapeHtml(p.filename) + '\\')">获取代码</button>' +
-                '<button class="btn-danger" onclick="confirmDeleteProbe(\\'' + p.id + '\\', \\'' + p.backend + '\\', \\'' + escapeHtml(p.filename) + '\\')">删除</button>' +
+                '<button class="btn-secondary" onclick="openProbeCodeModal(' + index + ')">获取代码</button>' +
+                '<button class="btn-danger" onclick="openDeleteModal(' + index + ')">删除</button>' +
               '</div>' +
             '</td>' +
           '</tr>';
@@ -213,6 +212,21 @@ export const scripts = `
       } catch (err) {
         tbody.innerHTML = '<tr><td colspan="6" class="empty-state" style="color:var(--danger)">加载探针列表失败</td></tr>';
       }
+    }
+
+    function openProbeCodeModal(index) {
+      const p = cachedProbes[index];
+      if (!p) return;
+      const extMatch = p.filename.match(/\\.([a-zA-Z0-9]+)$/);
+      const ext = extMatch ? extMatch[1].toLowerCase() : 'png';
+      const probeUrl = window.location.origin + '/i/' + p.id + '.' + ext;
+      viewProbeCode(probeUrl, p.filename);
+    }
+
+    function openDeleteModal(index) {
+      const p = cachedProbes[index];
+      if (!p) return;
+      confirmDeleteProbe(p.id, p.backend, p.filename);
     }
 
     function viewProbeCode(url, filename) {
@@ -292,7 +306,7 @@ export const scripts = `
             const isRep = log.isRepeat;
             const repText = log.visitCount && log.visitCount > 1 ? ' · #' + log.visitCount : (isRep ? ' · 回访' : '');
             const fpClass = isRep ? 'badge-fp badge-fp-repeat' : 'badge-fp';
-            const titleTip = '16位设备标识: ' + log.deviceFp + (log.clientFp ? '\n环境指纹: ' + log.clientFp : '');
+            const titleTip = '16位设备标识: ' + log.deviceFp + (log.clientFp ? '\\n环境指纹: ' + log.clientFp : '');
             clientHtml += '<br><span class="' + fpClass + '" title="' + escapeHtml(titleTip) + '"><span>dev_' + shortDev.substring(0, 8) + '</span>' + repText + '</span>';
           }
 
