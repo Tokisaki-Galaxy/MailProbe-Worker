@@ -1,155 +1,100 @@
-# MailProbe-Worker 📧🎯
+# MailProbe-Worker
 
-基于 **Cloudflare Workers** 的轻量级、免维护 Serverless 邮件图片探针与图床反代中继系统。
+基于 Cloudflare Workers 的 Serverless 邮件图片探针与图床反代中继系统。
 
-支持通过 Web 界面上传图片、自动中转托管到第三方图床或 Cloudflare R2、通过**钉钉群机器人（加签安全认证）**实时捕获并推送收件人的真实 IP、地理位置与设备指纹，并完美兼容 **Cloudflare Zero Trust (Access)** 访问保护。
-
----
-
-## ✨ 核心特性
-
-- ⚡ **零服务器 / 免维护**：纯 Cloudflare Workers Serverless 架构，无操作系统、无容器、高可用、自动享受免费全球 CDN 加速与 SSL 证书。
-- 🎨 **内置高颜值暗黑科技风控制台**：
-  - 玻璃拟态与现代化科技质感界面。
-  - 支持拖拽上传与实时图片预览。
-  - **图床自适应识别**：根据环境变量自动检测图床可用状态，支持在 `mjj.today` 免费图床与 `Cloudflare R2` 自带存储间自由切换，未配置的后端自动置灰禁用。
-  - **实时触发历史看板**：无需打开后台，网页直接展示最近触发记录（时间、备注、IP、地理位置、运营商、客户端/OS）。
-- 🔔 **钉钉机器人加签告警**：
-  - 采用 Web Crypto 原生计算 `HMAC-SHA256` 签名。
-  - 使用 `ctx.waitUntil()` 异步非阻塞推送，探针触发瞬间毫秒级直达钉钉群，完全不影响收件人加载图片的速度。
-- 🛡️ **反代中继与强力防缓存**：
-  - 收件人请求直接由 Worker 反向代理真实图片流，隐藏真实图床地址。
-  - 强制注入 `Cache-Control: no-cache, no-store, must-revalidate`、`Pragma: no-cache`，穿透邮件客户端与中间代理缓存。
-  - 探针失效或不存在时自动降级输出 1×1 像素透明 GIF，防止邮件出现裂图破损图标。
-- 🔐 **Cloudflare Zero Trust 友好**：
-  - 原生支持配置分流策略：仅需一条规则即可实现**“管理控制台必须扫码/SSO登录，而探针图片路径对全公网畅通放行”**。
+支持通过 Web 控制台上传图片、自动转存到第三方图床 (mjj.today) 或 Cloudflare R2、通过钉钉机器人（加签安全模式）实时捕获并回传访问者 IP 与设备特征，并原生支持 Cloudflare Zero Trust (Access) 安全保护。
 
 ---
 
-## 📸 钉钉告警预览
+## 核心特性
 
-当收件人打开邮件或下载图片时，你的钉钉群将在 1 秒内收到如下排版的 Markdown 卡片：
-
-> ### 🎯 邮件图片探针已被触发！
-> ---
-> - **探针备注**：发送给张总的项目报价单
-> - **对应文件**：`quotation_v2.png`
-> - **来源 IP**：`116.23.xxx.xxx`
-> - **地理位置**：🇨🇳 中国 · 广东省 · 广州市
-> - **网络归属**：中国电信 (AS4134)
-> - **设备系统**：Windows 10/11 · Foxmail 客户端
-> - **触发时间**：2026-09-08 20:15:30
-> - **User-Agent**：`Mozilla/5.0 (Windows NT 10.0; Win64; x64) Foxmail 7.2`
-
----
-
-## 🚀 快速部署指引
-
-### 准备工作
-1. 一个 Cloudflare 账号。
-2. （可选）一个钉钉群，添加自定义机器人，安全设置勾选【加签】，复制 `Webhook` 地址与 `SEC...` 密钥。
-3. （可选）[mjj.today](https://mjj.today/) 账号，登录后在【设置】->【API】中复制 API 密钥。
-
----
-
-### 方式 A：使用 Wrangler CLI 一键部署（推荐）
-
-1. **克隆项目并安装依赖**：
-   ```bash
-   git clone https://github.com/your-username/MailProbe-Worker.git
-   cd MailProbe-Worker
-   pnpm install
-   ```
-
-2. **创建 Cloudflare KV 命名空间**：
-   ```bash
-   pnpm exec wrangler kv:namespace create MAILPROBE_KV
-   ```
-   复制终端输出的 `id`，替换 `wrangler.toml` 中的 `YOUR_KV_NAMESPACE_ID`。
-
-3. **（可选）创建 Cloudflare R2 存储桶**：
-   如果你想使用 Cloudflare 自带的免费 R2 存储：
-   ```bash
-   pnpm exec wrangler r2 bucket create mailprobe-images
-   ```
-   并在 `wrangler.toml` 中取消注释 `[[r2_buckets]]` 段落。
-
-4. **配置环境变量 / 密钥**：
-   ```bash
-   # 钉钉机器人 Webhook (包含 access_token)
-   pnpm exec wrangler secret put DINGTALK_WEBHOOK
-
-   # 钉钉机器人加签密钥 (SEC 开头)
-   pnpm exec wrangler secret put DINGTALK_SECRET
-
-   # mjj.today 图床 API 密钥
-   pnpm exec wrangler secret put MJJ_API_KEY
-   ```
-
-5. **一键发布**：
-   ```bash
-   pnpm exec wrangler deploy
-   ```
+- **零服务器 / 免维护**：纯 Cloudflare Workers 架构，零服务器与证书运维负担，享有全球 CDN 与免费配额。
+- **暗黑科技风控制台 (无多余 Emoji)**：
+  - 玻璃拟态设计，界面利落专业。
+  - 支持拖放图片与实时文件预览。
+  - **环境自适应感知**：自动探测图床可用性，支持在 `mjj.today` 与 `Cloudflare R2` 间按需切换，未配置的后端自动置灰。
+  - **历史上传探针管理**：随时查看以往生成的探针、被触发次数、一键调出代码弹窗再次复制。
+  - **精细化删除控制**：删除探针时，支持选择是否永久销毁 R2 存储中的源文件；第三方图床源文件则受严格安全保护，禁止远程销毁。
+  - **实时触发日志看板**：直接在页面上查看近期触发时间、探针备注、公网 IP、地理位置、网络运营商、操作系统与客户端环境。
+- **多源高精度 IP 定位**：
+  - 支持可选集成自建 [ip-prism](https://github.com/tokisaki-galaxy/ip-prism) 四光谱 IP 定位服务 (高德 + 纯真 + GeoLite2 + IPinfo)。
+  - 若未配置或遭遇网络异常，全自动无缝回退到 Cloudflare 原生定位。
+- **钉钉机器人加签告警**：
+  - 基于 Web Crypto 原生生成 `HMAC-SHA256` 签名。
+  - 采用 `ctx.waitUntil()` 异步非阻塞推送，完全不影响图片加载速度。
+- **反代中继与强力防缓存**：
+  - 收件人请求由 Worker 反代回传，隐藏图床真实源站。
+  - 强制输出 `Cache-Control: no-cache, no-store, must-revalidate`，避免邮件客户端与网络代理产生缓存。
+  - 探针失效或不存在时自动降级输出 1x1 像素透明 GIF，防止邮件客户端展示裂图图标。
+- **Cloudflare Zero Trust 友好**：
+  - 完美支持路径分流：管理后台与上传接口走身份验证，探针图片路由对外公开放行。
 
 ---
 
-### 方式 B：Cloudflare 控制台在线粘贴部署
+## 部署配置指引
 
-1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)，进入 **Workers & Pages** -> **Create application** -> **Create Worker**。
-2. 点击 **Edit code**，将本项目 `src/` 编译后的代码或单文件内容直接复制粘贴进去，点击 **Deploy**。
-3. 进入该 Worker 的 **Settings** -> **Bindings**：
-   - 添加 **KV Namespace**：变量名填 `MAILPROBE_KV`，绑定一个你新建的 KV。
-   - （可选）添加 **R2 Bucket**：变量名填 `MAILPROBE_R2`，绑定一个新建的 R2 存储桶。
-   - 添加 **Variables and Secrets**：
-     - `DINGTALK_WEBHOOK`: 钉钉 Webhook
-     - `DINGTALK_SECRET`: 钉钉加签密钥
-     - `MJJ_API_KEY`: mjj.today 的 API 密钥
+### 1. 资源准备与环境变量
 
----
+在 `wrangler.toml` 或 Cloudflare 控制台中配置以下内容：
 
-## 🔒 Cloudflare Zero Trust (Access) 安全保护配置
+| 变量 / 绑定名 | 类型 | 说明 | 必填 |
+| :--- | :--- | :--- | :---: |
+| `MAILPROBE_KV` | KV Binding | 存储探针元数据、索引与触发历史 | 是 |
+| `MAILPROBE_R2` | R2 Binding | 存储上传的图片源文件 | 否 (使用 R2 时必选) |
+| `DINGTALK_WEBHOOK` | Secret | 钉钉自定义机器人 Webhook URL | 否 |
+| `DINGTALK_SECRET` | Secret | 钉钉机器人安全设置中的加签密钥 (SEC开头) | 否 |
+| `MJJ_API_KEY` | Secret | mjj.today 个人设置中获取的 API 密钥 | 否 (使用 mjj 图床时必选) |
+| `IP_PRISM_URL` | Variable | 自建 ip-prism 服务地址 (如 `https://ip-prism.api.tski.uk`) | 否 |
+| `IP_PRISM_KEY` | Secret | ip-prism 的 API 密钥 (如 `tokisaki-galaxy`) | 否 |
 
-为了防止他人滥用你的探针系统，同时确保**外部收件人能免登录加载图片**，请按照以下步骤配置：
-
-1. 打开 Cloudflare Dashboard，进入 **Zero Trust** -> **Access** -> **Applications**。
-2. 点击 **Add an application** -> 选择 **Self-hosted**。
-3. **Application Configuration**：
-   - **Application name**：`MailProbe`
-   - **Application domain**：填写你的 Worker 自定义子域名（如 `probe.yourdomain.com`），路径留空。
-4. **添加策略 1（放行探针图片 - 优先级最高，排第一位）**：
-   - **Rule action**：选择 `Bypass`（绕过 / 放行）
-   - **Rule name**：`Allow Public Probe Image Access`
-   - **Selector**：
-     - Rule type: `Include`
-     - Selector: `Everyone`
-   - **Path Configuration（非常关键）**：
-     - 切换到页面顶部的 **Path** 规则，添加路径为：`/i/*`
-5. **添加策略 2（保护管理后台与上传接口 - 排第二位）**：
-   - **Rule action**：选择 `Allow`（允许访问）
-   - **Rule name**：`Admin Only`
-   - **Path**：留空（匹配剩余所有路径）
-   - **Include**：配置为你自己的邮箱或团队账号（如 `Emails: your_email@example.com`）。
-
-> ✅ **完成效果**：
-> - 任何人访问 `https://probe.yourdomain.com/`，自动被 Zero Trust 拦截并要求验证码登录。
-> - 邮件客户端向 `https://probe.yourdomain.com/i/xxxx.png` 发起请求时，直接放行中继图片，并实时触发钉钉告警！
-
----
-
-## 🛠️ 本地开发与测试
-
-本项目遵循轻量原则，编写了完整的进程内测试套件（无需挂起长驻进程即可测试全部边缘特性）：
+### 2. 本地命令行发布 (Wrangler)
 
 ```bash
-# 类型检查
-pnpm run typecheck
+# 1. 安装依赖
+pnpm install
 
-# 运行进程内单元测试
-pnpm run test
+# 2. 创建 KV 空间并填入 wrangler.toml
+pnpm exec wrangler kv:namespace create MAILPROBE_KV
+
+# 3. 设置密钥 (根据需求按需设置)
+pnpm exec wrangler secret put DINGTALK_WEBHOOK
+pnpm exec wrangler secret put DINGTALK_SECRET
+pnpm exec wrangler secret put MJJ_API_KEY
+pnpm exec wrangler secret put IP_PRISM_KEY
+
+# 4. 发布部署
+pnpm exec wrangler deploy
 ```
 
 ---
 
-## 📄 开源许可证
+## Cloudflare Zero Trust (Access) 安全规则配置
 
-本项目基于 [MIT License](LICENSE) 开源。
+如需保护上传管理后台，且允许外部正常加载探针图片，只需在同一个 Zero Trust Application 中设置两条策略：
+
+1. **策略 1（放行探针图片，优先级排第一位）**：
+   - Action: `Bypass`
+   - Path: `/i/*`
+   - Include: `Everyone`
+2. **策略 2（保护管理控制台，优先级排第二位）**：
+   - Action: `Allow`
+   - Path: *(留空，匹配所有其他路径)*
+   - Include: 你的登录邮箱或身份源
+
+---
+
+## 本地测试与类型检查
+
+```bash
+# 执行静态类型检查
+npx tsc --noEmit
+
+# 执行全流程进程内单元测试
+npx vitest run
+```
+
+---
+
+## 开源协议
+
+MIT License

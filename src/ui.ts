@@ -25,6 +25,7 @@ export function renderHtml(appTitle: string): string {
       --success-bg: rgba(16, 185, 129, 0.1);
       --warning: #f59e0b;
       --danger: #ef4444;
+      --danger-bg: rgba(239, 68, 68, 0.1);
       --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
     }
@@ -90,6 +91,12 @@ export function renderHtml(appTitle: string): string {
       width: 18px;
       height: 18px;
       fill: white;
+    }
+
+    .header-badges {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
     }
 
     .status-badge {
@@ -184,7 +191,6 @@ export function renderHtml(appTitle: string): string {
       box-shadow: 0 0 0 3px var(--primary-glow);
     }
 
-    /* 图床单选组件 */
     .storage-selector {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -251,13 +257,24 @@ export function renderHtml(appTitle: string): string {
       border: 1px solid rgba(16, 185, 129, 0.3);
     }
 
+    .badge-r2 {
+      background: rgba(99, 102, 241, 0.12);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    .badge-mjj {
+      background: rgba(245, 158, 11, 0.12);
+      color: #fcd34d;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
     .badge-disabled {
       background: rgba(255, 255, 255, 0.05);
       color: var(--text-dim);
       border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
-    /* 拖拽上传区域 */
     .dropzone {
       border: 2px dashed var(--border-color);
       border-radius: 12px;
@@ -354,7 +371,19 @@ export function renderHtml(appTitle: string): string {
       background: rgba(255, 255, 255, 0.08);
     }
 
-    /* 生成结果展示区 */
+    .btn-danger {
+      background: var(--danger-bg);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.75rem;
+      border-radius: 8px;
+    }
+
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.2);
+    }
+
     .result-box {
       display: none;
       margin-top: 1.5rem;
@@ -417,7 +446,6 @@ export function renderHtml(appTitle: string): string {
       color: white;
     }
 
-    /* 历史记录表格 */
     .table-container {
       overflow-x: auto;
       margin-top: 1rem;
@@ -471,13 +499,102 @@ export function renderHtml(appTitle: string): string {
     }
 
     .empty-state {
-      padding: 3rem 1rem;
+      padding: 2.5rem 1rem;
       text-align: center;
       color: var(--text-dim);
       font-size: 0.85rem;
     }
 
-    /* Toast 消息提示 */
+    /* 模态框样式 */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-card {
+      background: #111827;
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 1.75rem;
+      width: 90%;
+      max-width: 520px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+
+    .modal-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 1.25rem;
+      cursor: pointer;
+    }
+
+    .modal-close:hover {
+      color: var(--text-main);
+    }
+
+    .checkbox-box {
+      margin: 1.25rem 0;
+      padding: 1rem;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-color);
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.88rem;
+      color: var(--text-main);
+      cursor: pointer;
+    }
+
+    .checkbox-label.disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .checkbox-tip {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-top: 0.4rem;
+      line-height: 1.4;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+    }
+
     .toast {
       position: fixed;
       bottom: 2rem;
@@ -492,7 +609,7 @@ export function renderHtml(appTitle: string): string {
       transform: translateY(100px);
       opacity: 0;
       transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-      z-index: 100;
+      z-index: 300;
     }
 
     .toast.show {
@@ -510,9 +627,15 @@ export function renderHtml(appTitle: string): string {
         </div>
         <span>${appTitle}</span>
       </div>
-      <div class="status-badge">
-        <span class="status-dot"></span>
-        <span id="dingtalk-status">钉钉加签监控中</span>
+      <div class="header-badges">
+        <div class="status-badge" id="badge-ipprism-box">
+          <span class="status-dot" id="dot-ipprism"></span>
+          <span id="ipprism-status">检测定位中...</span>
+        </div>
+        <div class="status-badge">
+          <span class="status-dot"></span>
+          <span id="dingtalk-status">钉钉加签就绪</span>
+        </div>
       </div>
     </div>
   </header>
@@ -528,29 +651,27 @@ export function renderHtml(appTitle: string): string {
       </div>
 
       <div class="form-group">
-        <label>探针备注 / 标签（例如：发送给张三的方案配图）</label>
-        <input type="text" id="probe-note" placeholder="选填，用于钉钉告警和历史记录中识别受众目标" />
+        <label>探针备注（例如：发给张三的方案配图）</label>
+        <input type="text" id="probe-note" placeholder="选填，用于在钉钉通知与记录中辨别受众" />
       </div>
 
       <div class="form-group">
-        <label>选择图床存储后端</label>
+        <label>选择存储后端</label>
         <div class="storage-selector">
-          <!-- mjj.today -->
           <div class="storage-option" id="opt-mjj" data-backend="mjj">
             <div class="storage-title">
               <span>mjj.today 免费图床</span>
               <span class="badge" id="badge-mjj">检测中...</span>
             </div>
-            <div class="storage-desc">通过 Chevereto API 托管图片，无存储空间限制</div>
+            <div class="storage-desc">Chevereto 远端图床托管，不占用个人存储</div>
           </div>
 
-          <!-- Cloudflare R2 -->
           <div class="storage-option" id="opt-r2" data-backend="r2">
             <div class="storage-title">
-              <span>Cloudflare 自带存储 (R2)</span>
+              <span>Cloudflare R2 存储</span>
               <span class="badge" id="badge-r2">检测中...</span>
             </div>
-            <div class="storage-desc">私有 S3 兼容对象存储，零外部依赖，极速响应</div>
+            <div class="storage-desc">Cloudflare 内部对象存储，支持自主删除源文件</div>
           </div>
         </div>
       </div>
@@ -560,7 +681,7 @@ export function renderHtml(appTitle: string): string {
         <div class="dropzone" id="dropzone">
           <input type="file" id="file-input" accept="image/*" style="display: none;" />
           <svg class="dropzone-icon" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/></svg>
-          <div class="dropzone-hint">点击选择文件，或将图片拖拽至此处 (支持 PNG, JPG, GIF, WebP)</div>
+          <div class="dropzone-hint">点击选择文件，或将图片拖放至此处 (支持 PNG, JPG, GIF, WebP)</div>
           <div class="dropzone-file-preview" id="file-preview">
             <img class="preview-thumb" id="preview-img" src="" alt="preview" />
             <div class="file-info">
@@ -575,15 +696,15 @@ export function renderHtml(appTitle: string): string {
         <span id="btn-text">立即上传并生成探针</span>
       </button>
 
-      <!-- 生成结果展示 -->
+      <!-- 结果展示 -->
       <div class="result-box" id="result-box">
         <div class="result-title">
           <svg width="18" height="18" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-          探针生成成功！复制下方代码即可嵌入邮件
+          探针生成完毕，复制下方代码即可嵌入邮件
         </div>
 
         <div class="copy-item">
-          <label>1. HTML 邮件透明像素（隐蔽侦测，对方无感知）</label>
+          <label>1. HTML 邮件透明像素（隐蔽侦测，对方无感）</label>
           <div class="copy-group">
             <input type="text" class="copy-input" id="code-pixel" readonly />
             <button class="btn-copy" onclick="copyText('code-pixel')">复制</button>
@@ -591,7 +712,7 @@ export function renderHtml(appTitle: string): string {
         </div>
 
         <div class="copy-item">
-          <label>2. HTML 邮件正文配图（显示真实图片，对方打开即触发）</label>
+          <label>2. HTML 邮件正文配图（显示图片，对方打开即触发）</label>
           <div class="copy-group">
             <input type="text" class="copy-input" id="code-img" readonly />
             <button class="btn-copy" onclick="copyText('code-img')">复制</button>
@@ -608,7 +729,38 @@ export function renderHtml(appTitle: string): string {
       </div>
     </div>
 
-    <!-- 历史触发看板 -->
+    <!-- 历史已创建探针库 -->
+    <div class="glass-card">
+      <div class="section-header">
+        <div class="section-title">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+          历史上传探针管理
+        </div>
+        <button class="btn btn-secondary" onclick="fetchProbes()">刷新列表</button>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>创建时间</th>
+              <th>探针备注</th>
+              <th>文件名称</th>
+              <th>存储后端</th>
+              <th>触发次数</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="probes-tbody">
+            <tr>
+              <td colspan="6" class="empty-state">正在加载探针列表...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 探针触发历史记录 -->
     <div class="glass-card">
       <div class="section-header">
         <div class="section-title">
@@ -616,12 +768,8 @@ export function renderHtml(appTitle: string): string {
           探针触发历史记录
         </div>
         <div style="display: flex; gap: 0.5rem;">
-          <button class="btn btn-secondary" onclick="fetchLogs()">
-            刷新记录
-          </button>
-          <button class="btn btn-secondary" onclick="clearLogs()" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.3);">
-            清空历史
-          </button>
+          <button class="btn btn-secondary" onclick="fetchLogs()">刷新记录</button>
+          <button class="btn btn-secondary" onclick="clearLogs()" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.3);">清空历史</button>
         </div>
       </div>
 
@@ -647,14 +795,67 @@ export function renderHtml(appTitle: string): string {
     </div>
   </main>
 
+  <!-- 查看探针代码弹窗 -->
+  <div class="modal-overlay" id="modal-view-code">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">获取探针代码</div>
+        <button class="modal-close" onclick="closeModal('modal-view-code')">&times;</button>
+      </div>
+      <div class="copy-item">
+        <label>HTML 邮件透明像素</label>
+        <div class="copy-group">
+          <input type="text" class="copy-input" id="modal-code-pixel" readonly />
+          <button class="btn-copy" onclick="copyText('modal-code-pixel')">复制</button>
+        </div>
+      </div>
+      <div class="copy-item">
+        <label>HTML 邮件正文配图</label>
+        <div class="copy-group">
+          <input type="text" class="copy-input" id="modal-code-img" readonly />
+          <button class="btn-copy" onclick="copyText('modal-code-img')">复制</button>
+        </div>
+      </div>
+      <div class="copy-item">
+        <label>反代直链 / 下载地址</label>
+        <div class="copy-group">
+          <input type="text" class="copy-input" id="modal-code-raw" readonly />
+          <button class="btn-copy" onclick="copyText('modal-code-raw')">复制</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 删除确认弹窗 (区分 R2 与 第三方存储) -->
+  <div class="modal-overlay" id="modal-delete">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">删除探针确认</div>
+        <button class="modal-close" onclick="closeModal('modal-delete')">&times;</button>
+      </div>
+      <div style="font-size:0.9rem; color:var(--text-main); margin-bottom: 0.5rem;" id="modal-del-desc">
+        确定要删除该探针吗？
+      </div>
+      
+      <div class="checkbox-box" id="modal-del-checkbox-box">
+        <!-- 动态由 JavaScript 填充内容 -->
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-delete')">取消</button>
+        <button class="btn btn-danger" id="btn-confirm-delete">确认删除</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
     let selectedBackend = null;
     let selectedFile = null;
     let serverConfig = {};
+    let probeToDelete = null;
 
-    // 显示 Toast
     function showToast(msg) {
       const toast = document.getElementById('toast');
       toast.innerText = msg;
@@ -662,16 +863,22 @@ export function renderHtml(appTitle: string): string {
       setTimeout(() => toast.classList.remove('show'), 2500);
     }
 
-    // 复制文本
     function copyText(id) {
       const input = document.getElementById(id);
       input.select();
       navigator.clipboard.writeText(input.value).then(() => {
-        showToast('已复制到剪贴板！');
+        showToast('已复制到剪贴板');
       });
     }
 
-    // 初始化获取后端可用状态
+    function openModal(id) {
+      document.getElementById(id)?.classList.add('active');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id)?.classList.remove('active');
+    }
+
     async function initConfig() {
       try {
         const res = await fetch('/api/config');
@@ -683,11 +890,22 @@ export function renderHtml(appTitle: string): string {
           document.getElementById('dingtalk-status').style.color = 'var(--text-dim)';
         }
 
-        // mjj 选项状态
+        // ip-prism 状态
+        const dotPrism = document.getElementById('dot-ipprism');
+        const statusPrism = document.getElementById('ipprism-status');
+        if (serverConfig.ipPrism) {
+          statusPrism.innerText = 'ip-prism 高精定位已生效';
+        } else {
+          statusPrism.innerText = 'Cloudflare 原生定位';
+          dotPrism.style.background = 'var(--text-dim)';
+          dotPrism.style.boxShadow = 'none';
+        }
+
+        // mjj 选项
         const optMjj = document.getElementById('opt-mjj');
         const badgeMjj = document.getElementById('badge-mjj');
         if (serverConfig.mjj) {
-          badgeMjj.innerText = '已就绪';
+          badgeMjj.innerText = '就绪';
           badgeMjj.className = 'badge badge-success';
           optMjj.onclick = () => selectBackend('mjj');
           if (!selectedBackend) selectBackend('mjj');
@@ -697,11 +915,11 @@ export function renderHtml(appTitle: string): string {
           optMjj.classList.add('disabled');
         }
 
-        // R2 选项状态
+        // R2 选项
         const optR2 = document.getElementById('opt-r2');
         const badgeR2 = document.getElementById('badge-r2');
         if (serverConfig.r2) {
-          badgeR2.innerText = '已就绪';
+          badgeR2.innerText = '就绪';
           badgeR2.className = 'badge badge-success';
           optR2.onclick = () => selectBackend('r2');
           if (!selectedBackend) selectBackend('r2');
@@ -713,15 +931,13 @@ export function renderHtml(appTitle: string): string {
 
         checkUploadReady();
       } catch (err) {
-        console.error('获取后端状态失败', err);
+        console.error('获取配置失败', err);
       }
     }
 
     function selectBackend(backend) {
       selectedBackend = backend;
-      document.querySelectorAll('.storage-option').forEach(el => {
-        el.classList.remove('selected');
-      });
+      document.querySelectorAll('.storage-option').forEach(el => el.classList.remove('selected'));
       document.getElementById('opt-' + backend)?.classList.add('selected');
       checkUploadReady();
     }
@@ -731,7 +947,6 @@ export function renderHtml(appTitle: string): string {
       btn.disabled = !(selectedFile && selectedBackend);
     }
 
-    // 文件选择与拖拽
     const dropzone = document.getElementById('dropzone');
     const fileInput = document.getElementById('file-input');
 
@@ -744,14 +959,10 @@ export function renderHtml(appTitle: string): string {
     dropzone.addEventListener('drop', (e) => {
       e.preventDefault();
       dropzone.classList.remove('dragover');
-      if (e.dataTransfer.files.length) {
-        handleFile(e.dataTransfer.files[0]);
-      }
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
     });
     fileInput.addEventListener('change', (e) => {
-      if (e.target.files.length) {
-        handleFile(e.target.files[0]);
-      }
+      if (e.target.files.length) handleFile(e.target.files[0]);
     });
 
     function handleFile(file) {
@@ -762,7 +973,7 @@ export function renderHtml(appTitle: string): string {
       selectedFile = file;
       document.getElementById('file-name').innerText = file.name;
       document.getElementById('file-size').innerText = (file.size / 1024).toFixed(1) + ' KB';
-      
+
       const reader = new FileReader();
       reader.onload = (e) => {
         document.getElementById('preview-img').src = e.target.result;
@@ -773,14 +984,13 @@ export function renderHtml(appTitle: string): string {
       checkUploadReady();
     }
 
-    // 上传处理
     document.getElementById('btn-upload').addEventListener('click', async () => {
       if (!selectedFile || !selectedBackend) return;
 
       const btn = document.getElementById('btn-upload');
       const btnText = document.getElementById('btn-text');
       btn.disabled = true;
-      btnText.innerText = '正在上传并中转至图床...';
+      btnText.innerText = '正在上传中转...';
 
       const formData = new FormData();
       formData.append('file', selectedFile);
@@ -795,24 +1005,118 @@ export function renderHtml(appTitle: string): string {
 
         const data = await res.json();
         if (data.success) {
-          showToast('上传成功，探针已就绪！');
+          showToast('上传成功，探针已就绪');
           document.getElementById('result-box').style.display = 'block';
-          
+
           document.getElementById('code-pixel').value = '<img src="' + data.probeUrl + '" width="1" height="1" alt="" style="display:none;" />';
           document.getElementById('code-img').value = '<img src="' + data.probeUrl + '" alt="' + (data.filename || 'image') + '" />';
           document.getElementById('code-raw').value = data.probeUrl;
+
+          fetchProbes();
         } else {
           showToast('上传失败: ' + (data.error || '未知错误'));
         }
       } catch (err) {
-        showToast('网络请求失败，请检查连接');
+        showToast('网络请求失败');
       } finally {
         btn.disabled = false;
         btnText.innerText = '立即上传并生成探针';
       }
     });
 
-    // 获取并渲染历史记录
+    // 获取并渲染历史探针列表
+    async function fetchProbes() {
+      const tbody = document.getElementById('probes-tbody');
+      try {
+        const res = await fetch('/api/probes');
+        const probes = await res.json();
+
+        if (!probes || probes.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无已上传探针</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = probes.map(p => {
+          const dateStr = p.createdAt ? new Date(p.createdAt).toLocaleString('zh-CN', { hour12: false }) : '-';
+          const extMatch = p.filename.match(/\\.([a-zA-Z0-9]+)$/);
+          const ext = extMatch ? extMatch[1].toLowerCase() : 'png';
+          const probeUrl = window.location.origin + '/i/' + p.id + '.' + ext;
+          const backendBadge = p.backend === 'r2' 
+            ? '<span class="badge badge-r2">Cloudflare R2</span>' 
+            : '<span class="badge badge-mjj">mjj.today</span>';
+
+          return '<tr>' +
+            '<td style="white-space:nowrap;">' + dateStr + '</td>' +
+            '<td><strong style="color:var(--text-main);">' + (escapeHtml(p.note) || '无备注') + '</strong></td>' +
+            '<td>' + escapeHtml(p.filename) + '</td>' +
+            '<td>' + backendBadge + '</td>' +
+            '<td><span class="tag tag-ip">' + (p.hits || 0) + ' 次</span></td>' +
+            '<td>' +
+              '<div style="display:flex; gap:0.4rem;">' +
+                '<button class="btn-secondary" onclick="viewProbeCode(\\'' + probeUrl + '\\', \\'' + escapeHtml(p.filename) + '\\')">获取代码</button>' +
+                '<button class="btn-danger" onclick="confirmDeleteProbe(\\'' + p.id + '\\', \\'' + p.backend + '\\', \\'' + escapeHtml(p.filename) + '\\')">删除</button>' +
+              '</div>' +
+            '</td>' +
+          '</tr>';
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state" style="color:var(--danger)">加载探针列表失败</td></tr>';
+      }
+    }
+
+    function viewProbeCode(url, filename) {
+      document.getElementById('modal-code-pixel').value = '<img src="' + url + '" width="1" height="1" alt="" style="display:none;" />';
+      document.getElementById('modal-code-img').value = '<img src="' + url + '" alt="' + (filename || 'image') + '" />';
+      document.getElementById('modal-code-raw').value = url;
+      openModal('modal-view-code');
+    }
+
+    function confirmDeleteProbe(id, backend, filename) {
+      probeToDelete = { id, backend, filename };
+      document.getElementById('modal-del-desc').innerText = '即将删除探针: ' + filename;
+
+      const checkboxBox = document.getElementById('modal-del-checkbox-box');
+      if (backend === 'r2') {
+        checkboxBox.innerHTML = 
+          '<label class="checkbox-label">' +
+            '<input type="checkbox" id="chk-del-source" checked />' +
+            '<span>同时从 Cloudflare R2 存储桶中永久删除原始图片</span>' +
+          '</label>' +
+          '<div class="checkbox-tip">勾选后将销毁 R2 中的源文件对象，释放存储空间。</div>';
+      } else {
+        checkboxBox.innerHTML = 
+          '<label class="checkbox-label disabled">' +
+            '<input type="checkbox" disabled />' +
+            '<span>同时删除存储中源文件 (不支持)</span>' +
+          '</label>' +
+          '<div class="checkbox-tip" style="color:var(--warning);">此图片保存在第三方图床 (mjj.today)，仅清理本地探针路由与访问记录，第三方源文件不受影响。</div>';
+      }
+
+      openModal('modal-delete');
+    }
+
+    document.getElementById('btn-confirm-delete').addEventListener('click', async () => {
+      if (!probeToDelete) return;
+      const chk = document.getElementById('chk-del-source');
+      const deleteSource = chk ? chk.checked : false;
+
+      try {
+        const res = await fetch('/api/probes/' + probeToDelete.id + '?deleteSource=' + deleteSource, {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('探针删除成功');
+          closeModal('modal-delete');
+          fetchProbes();
+        } else {
+          showToast('删除失败: ' + (data.error || '未知错误'));
+        }
+      } catch (err) {
+        showToast('请求异常');
+      }
+    });
+
     async function fetchLogs() {
       const tbody = document.getElementById('logs-tbody');
       try {
@@ -830,7 +1134,7 @@ export function renderHtml(appTitle: string): string {
             '<td><strong style="color:var(--text-main);">' + (escapeHtml(log.note) || '无备注') + '</strong><br><span style="font-size:0.75rem;color:var(--text-dim);">' + escapeHtml(log.filename) + '</span></td>' +
             '<td><span class="tag tag-ip">' + log.ip + '</span></td>' +
             '<td><span class="tag tag-location">' + (escapeHtml(log.country) + ' · ' + escapeHtml(log.region) + ' · ' + escapeHtml(log.city)) + '</span></td>' +
-            '<td>' + escapeHtml(log.isp || '未知') + (log.asn ? ' (' + log.asn + ')' : '') + '</td>' +
+            '<td>' + escapeHtml(log.isp || '未知') + '</td>' +
             '<td><span style="color:var(--text-main);">' + escapeHtml(log.clientType) + '</span></td>' +
           '</tr>';
         }).join('');
@@ -857,10 +1161,9 @@ export function renderHtml(appTitle: string): string {
       });
     }
 
-    // 页面初始化
     initConfig();
+    fetchProbes();
     fetchLogs();
-    // 每 15 秒轮询一次日志
     setInterval(fetchLogs, 15000);
   </script>
 </body>

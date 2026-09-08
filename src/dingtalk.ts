@@ -1,7 +1,7 @@
 import { DingTalkAlertData } from "./types";
 
 /**
- * 解析 User-Agent 返回更直观的设备/客户端描述
+ * 解析 User-Agent 返回设备与客户端描述
  */
 export function parseUserAgent(ua: string): { os: string; client: string } {
   if (!ua) return { os: "未知", client: "未知客户端" };
@@ -18,20 +18,20 @@ export function parseUserAgent(ua: string): { os: string; client: string } {
   if (/Foxmail/i.test(ua)) client = "Foxmail 客户端";
   else if (/Outlook|Microsoft Office/i.test(ua)) client = "Microsoft Outlook";
   else if (/Thunderbird/i.test(ua)) client = "Mozilla Thunderbird";
-  else if (/MicroMessenger/i.test(ua)) client = "微信内嵌网页";
+  else if (/MicroMessenger/i.test(ua)) client = "微信内置浏览器";
   else if (/QQMail|QQBrowser/i.test(ua)) client = "QQ邮箱/QQ浏览器";
   else if (/AppleWebKit.*Mobile.*Safari/i.test(ua) && /iPhone|iPad/i.test(ua)) client = "iOS Mail / Safari";
   else if (/Edg\//i.test(ua)) client = "Microsoft Edge";
   else if (/Chrome\//i.test(ua)) client = "Google Chrome";
   else if (/Firefox\//i.test(ua)) client = "Mozilla Firefox";
   else if (/Safari\//i.test(ua)) client = "Apple Safari";
-  else if (/curl|wget|python|httpclient/i.test(ua)) client = "脚本 / 命令行探测工具";
+  else if (/curl|wget|python|httpclient/i.test(ua)) client = "命令行探测工具";
 
   return { os, client };
 }
 
 /**
- * 计算钉钉机器人加签并发送 Markdown 告警
+ * 计算钉钉机器人加签并发送 Markdown 告警 (无 Emoji 极简排版)
  */
 export async function sendDingTalkAlert(
   webhook: string,
@@ -42,7 +42,6 @@ export async function sendDingTalkAlert(
     const timestamp = Date.now();
     const stringToSign = `${timestamp}\n${secret}`;
 
-    // 使用 Web Crypto API 生成 HMAC-SHA256
     const key = await crypto.subtle.importKey(
       "raw",
       new TextEncoder().encode(secret),
@@ -57,25 +56,25 @@ export async function sendDingTalkAlert(
       new TextEncoder().encode(stringToSign)
     );
 
-    // 转 Base64 并进行 URL 编码
     const binary = String.fromCharCode(...new Uint8Array(signature));
     const base64Sign = btoa(binary);
     const signParam = encodeURIComponent(base64Sign);
 
-    // 拼接完整的加签 URL
     const delimiter = webhook.includes("?") ? "&" : "?";
     const finalUrl = `${webhook}${delimiter}timestamp=${timestamp}&sign=${signParam}`;
 
-    const title = data.isDownload ? "📥 探针图片被主动下载！" : "🎯 邮件图片探针被加载！";
+    const title = data.isDownload ? "[通知] 探针图片被主动下载" : "[通知] 邮件图片探针被加载";
+
+    const providerText = data.provider ? ` (来源: ${data.provider})` : "";
 
     const markdownText = `### ${title}
 ---
 - **探针备注**：${data.note || "未设置备注"}
 - **对应文件**：\`${data.filename}\`
 - **来源 IP**：\`${data.ip}\`
-- **地理位置**：${data.location}
-- **网络归属**：${data.isp}
-- **设备系统**：${data.clientType}
+- **地理位置**：${data.location}${providerText}
+- **网络运营商**：${data.isp}
+- **设备环境**：${data.clientType}
 - **触发时间**：${data.timeStr}
 - **User-Agent**：
   > \`${data.userAgent.substring(0, 300)}\`

@@ -1,12 +1,35 @@
 import { Env, ProbeMetadata, ProbeTriggerLog, StorageBackendType } from "./types";
 import { parseUserAgent, sendDingTalkAlert } from "./dingtalk";
+import { lookupIpWithPrism } from "./ipprism";
 import { uploadToMjj } from "./storage/mjj";
 import { uploadToR2 } from "./storage/r2";
 import { renderHtml } from "./ui";
 
-// 1x1 像素透明 GIF 二进制数据
 const TRANSPARENT_GIF_BASE64 = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const TRANSPARENT_GIF_BYTES = Uint8Array.from(atob(TRANSPARENT_GIF_BASE64), c => c.charCodeAt(0));
+
+// 辅助管理探针索引
+async function getProbeIndex(kv?: KVNamespace): Promise<string[]> {
+  if (!kv) return [];
+  const raw = await kv.get("index:probes");
+  return raw ? JSON.parse(raw) : [];
+}
+
+async function addProbeToIndex(id: string, kv?: KVNamespace): Promise<void> {
+  if (!kv) return;
+  const ids = await getProbeIndex(kv);
+  if (!ids.includes(id)) {
+    ids.unshift(id);
+    await kv.put("index:probes", JSON.stringify(ids.slice(0, 500)));
+  }
+}
+
+async function removeProbeFromIndex(id: string, kv?: KVNamespace): Promise<void> {
+  if (!kv) return;
+  const ids = await getProbeIndex(kv);
+  const filtered = ids.filter(item => item !== id);
+  await kv.put("index:probes", JSON.stringify(filtered));
+}
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -21,12 +44,13 @@ export default {
       });
     }
 
-    // 2. 获取当前环境支持的图床配置
+    // 2. 获取当前环境支持的配置
     if (pathname === "/api/config" && request.method === "GET") {
       return Response.json({
         mjj: Boolean(env.MJJ_API_KEY && env.MJJ_API_KEY.trim().length > 0),
         r2: Boolean(env.MAILPROBE_R2),
-        dingtalk: Boolean(env.DINGTALK_WEBHOOK && env.DINGTALK_SECRET)
+        dingtalk: Boolean(env.DINGTALK_WEBHOOK && env.DINGTALK_SECRET),
+        ipPrism: Boolean(env.IP_PRISM_URL && env.IP_PRISM_KEY)
       });
     }
 
@@ -73,7 +97,6 @@ export default {
           return Response.json({ success: false, error: "未知的存储后端" }, { status: 400 });
         }
 
-        // 保存元数据至 KV
         const metadata: ProbeMetadata = {
           id: probeId,
           filename: file.name,
@@ -88,9 +111,9 @@ export default {
 
         if (env.MAILPROBE_KV) {
           await env.MAILPROBE_KV.put(`probe:${probeId}`, JSON.stringify(metadata));
+          await addProbeToIndex(probeId, env.MAILPROBE_KV);
         }
 
-        // 获取文件后缀名
         const extMatch = file.name.match(/\.([a-zA-Z0-9]+)$/);
         const ext = extMatch ? extMatch[1].toLowerCase() : "png";
         const probeUrl = `${url.origin}/i/${probeId}.${ext}`;
@@ -100,14 +123,66 @@ export default {
           probeId,
           probeUrl,
           filename: file.name,
-          note
+          note,
+          backend
         });
       } catch (err: any) {
         return Response.json({ success: false, error: err?.message || String(err) }, { status: 500 });
       }
     }
 
-    // 4. 获取探针触发历史记录
+    // 4. 查询已创建的探针列表
+    if (pathname === "/api/probes" && request.method === "GET") {
+      if (!env.MAILPROBE_KV) {
+        return Response.json([]);
+      }
+      const ids = await getProbeIndex(env.MAILPROBE_KV);
+      const probes: ProbeMetadata[] = [];
+
+      for (const id of ids) {
+        const raw = await env.MAILPROBE_KV.get(`probe:${id}`);
+        if (raw) {
+          try {
+            probes.push(JSON.parse(raw));
+          } catch (e) {}
+        }
+      }
+
+      return Response.json(probes);
+    }
+
+    // 5. 删除探针接口（支持选择是否销毁 R2 源文件，非 R2 存储严格不删除源文件）
+    if (pathname.startsWith("/api/probes/") && request.method === "DELETE") {
+      const probeId = pathname.replace("/api/probes/", "").trim();
+      if (!probeId) {
+        return Response.json({ success: false, error: "探针 ID 不能为空" }, { status: 400 });
+      }
+
+      const deleteSource = url.searchParams.get("deleteSource") === "true";
+
+      if (env.MAILPROBE_KV) {
+        const raw = await env.MAILPROBE_KV.get(`probe:${probeId}`);
+        if (raw) {
+          try {
+            const probe = JSON.parse(raw) as ProbeMetadata;
+
+            // 严格约束：仅当存储后端是 R2，且用户勾选了 deleteSource 时，才调用 R2 销毁源文件
+            if (deleteSource && probe.backend === "r2" && probe.r2Key && env.MAILPROBE_R2) {
+              await env.MAILPROBE_R2.delete(probe.r2Key);
+            }
+          } catch (e) {
+            console.error("处理探针源文件删除异常", e);
+          }
+        }
+
+        await env.MAILPROBE_KV.delete(`probe:${probeId}`);
+        await removeProbeFromIndex(probeId, env.MAILPROBE_KV);
+      }
+
+      return Response.json({ success: true, probeId });
+    }
+
+    // 6. 获取探针触发历史记录
     if (pathname === "/api/logs" && request.method === "GET") {
       if (!env.MAILPROBE_KV) {
         return Response.json([]);
@@ -117,7 +192,7 @@ export default {
       return Response.json(logs);
     }
 
-    // 5. 清空探针触发历史记录
+    // 7. 清空探针触发历史记录
     if (pathname === "/api/logs" && request.method === "DELETE") {
       if (env.MAILPROBE_KV) {
         await env.MAILPROBE_KV.delete("logs:recent");
@@ -125,7 +200,7 @@ export default {
       return Response.json({ success: true });
     }
 
-    // 6. 探针触发与图片反代下载入口 (路径格式: /i/:id 或 /i/:id.ext)
+    // 8. 探针触发与图片反代下载入口 (路径格式: /i/:id 或 /i/:id.ext)
     if (pathname.startsWith("/i/")) {
       const pathPart = pathname.substring(3);
       const probeId = pathPart.split(".")[0];
@@ -141,21 +216,41 @@ export default {
         }
       }
 
-      // 获取访客详细信息
+      // 获取访客信息
       const ip = request.headers.get("cf-connecting-ip") || "127.0.0.1";
       const userAgent = request.headers.get("user-agent") || "";
-      const country = (request.cf?.country as string) || "未知";
-      const region = (request.cf?.region as string) || "未知";
-      const city = (request.cf?.city as string) || "未知";
-      const isp = (request.cf?.asOrganization as string) || "未知运营商";
-      const asn = request.cf?.asn as number | undefined;
       const referer = request.headers.get("referer") || undefined;
+
+      // 默认 Cloudflare 原生定位
+      let country = (request.cf?.country as string) || "未知";
+      let region = (request.cf?.region as string) || "未知";
+      let city = (request.cf?.city as string) || "未知";
+      let isp = (request.cf?.asOrganization as string) || "未知运营商";
+      const asn = request.cf?.asn as number | undefined;
+      let locationSummary = `${country} · ${region} · ${city}`;
+      let provider = "Cloudflare 原生";
+
+      // 如果配置了 ip-prism，尝试高精度解析
+      if (env.IP_PRISM_URL && env.IP_PRISM_KEY) {
+        try {
+          const prismRes = await lookupIpWithPrism(env.IP_PRISM_URL, env.IP_PRISM_KEY, ip);
+          if (prismRes.success) {
+            if (prismRes.country) country = prismRes.country;
+            if (prismRes.region) region = prismRes.region;
+            if (prismRes.city) city = prismRes.city;
+            if (prismRes.isp) isp = prismRes.isp;
+            if (prismRes.location) locationSummary = prismRes.location;
+            provider = "ip-prism";
+          }
+        } catch (e) {
+          // 优雅降级保持原生数据
+        }
+      }
 
       const uaParsed = parseUserAgent(userAgent);
       const clientType = `${uaParsed.os} · ${uaParsed.client}`;
 
       const now = new Date();
-      // 格式化为东八区时间
       const timeStr = new Intl.DateTimeFormat("zh-CN", {
         timeZone: "Asia/Shanghai",
         year: "numeric",
@@ -183,18 +278,17 @@ export default {
                 country,
                 region,
                 city,
-                isp,
+                isp: asn ? `${isp} (AS${asn})` : isp,
                 asn,
                 userAgent,
                 clientType,
                 referer,
                 timestamp: timeStr,
-                isDownload
+                isDownload,
+                provider
               };
               logs.unshift(newLog);
-              // 最多保留最新 100 条记录
-              const trimmed = logs.slice(0, 100);
-              await env.MAILPROBE_KV.put("logs:recent", JSON.stringify(trimmed));
+              await env.MAILPROBE_KV.put("logs:recent", JSON.stringify(logs.slice(0, 100)));
 
               if (probe) {
                 probe.hits = (probe.hits || 0) + 1;
@@ -210,17 +304,17 @@ export default {
 
       // 异步发送钉钉加签告警
       if (env.DINGTALK_WEBHOOK && env.DINGTALK_SECRET) {
-        const location = `${country} · ${region} · ${city}`;
         const alertData = {
           note: probe?.note || "无备注探针",
           filename: probe?.filename || `${probeId}.png`,
           ip,
-          location,
-          isp: asn ? `${isp} (AS${asn})` : isp,
+          location: locationSummary,
+          isp: asn && !isp.includes("AS") ? `${isp} (AS${asn})` : isp,
           userAgent,
           clientType,
           timeStr,
-          isDownload
+          isDownload,
+          provider
         };
 
         ctx.waitUntil(
@@ -228,14 +322,14 @@ export default {
         );
       }
 
-      // 核心图片反代中继输出
+      // 核心防缓存响应头
       const antiCacheHeaders = {
         "Cache-Control": "no-cache, no-store, must-revalidate, proxy-revalidate, max-age=0",
         "Pragma": "no-cache",
         "Expires": "0"
       };
 
-      // 1. 如果探针对应 R2 存储
+      // 1. R2 存储
       if (probe?.backend === "r2" && probe.r2Key && env.MAILPROBE_R2) {
         const object = await env.MAILPROBE_R2.get(probe.r2Key);
         if (object) {
@@ -252,7 +346,7 @@ export default {
         }
       }
 
-      // 2. 如果探针对应 mjj.today 外部直链
+      // 2. mjj.today 直链反代
       if (probe?.backend === "mjj" && probe.originUrl) {
         try {
           const originRes = await fetch(probe.originUrl, {
@@ -279,7 +373,7 @@ export default {
         }
       }
 
-      // 3. 兜底回退：返回 1x1 像素透明 GIF，保证邮件客户端不显示破图图标
+      // 3. 兜底回退：返回 1x1 像素透明 GIF
       return new Response(TRANSPARENT_GIF_BYTES, {
         status: 200,
         headers: {

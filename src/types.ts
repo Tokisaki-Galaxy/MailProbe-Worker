@@ -4,6 +4,8 @@ export interface Env {
   DINGTALK_WEBHOOK?: string;
   DINGTALK_SECRET?: string;
   MJJ_API_KEY?: string;
+  IP_PRISM_URL?: string;
+  IP_PRISM_KEY?: string;
   APP_TITLE?: string;
 }
 
@@ -38,6 +40,7 @@ export interface ProbeTriggerLog {
   referer?: string;
   timestamp: string;
   isDownload: boolean;
+  provider?: string; // "ip-prism" | "cloudflare"
 }
 
 export interface DingTalkAlertData {
@@ -50,4 +53,16 @@ export interface DingTalkAlertData {
   clientType: string;
   timeStr: string;
   isDownload: boolean;
+  provider?: string;
+}
+
+export interface IpPrismResult {
+  ip: string;
+  summary?: string;
+  best?: {
+    country?: { value?: string };
+    region?: { value?: string };
+    city?: { value?: string };
+    isp?: { value?: string };
+  };
 }

@@ -2,23 +2,24 @@ name = "mailprobe-worker"
 main = "src/index.ts"
 compatibility_date = "2024-12-30"
 
-# KV 命名空间绑定 (用于存储探针元数据、图片对应关系以及触发历史记录)
-# 在 Cloudflare 控制台创建后填入对应 id
+# KV 命名空间绑定 (存储探针元数据与触发日志)
 [[kv_namespaces]]
 binding = "MAILPROBE_KV"
 id = "YOUR_KV_NAMESPACE_ID"
 preview_id = "YOUR_PREVIEW_KV_ID"
 
-# R2 存储桶绑定 (可选：若使用 Cloudflare 自带 R2 存储)
+# R2 存储桶绑定 (可选：使用 Cloudflare R2 存储)
 # [[r2_buckets]]
 # binding = "MAILPROBE_R2"
 # bucket_name = "mailprobe-images"
 
 [vars]
-# 默认配置与展示标题
 APP_TITLE = "MailProbe 邮件探针"
+# 自建高精多源 IP 定位服务 (可选)
+IP_PRISM_URL = "https://ip-prism.api.tski.uk"
 
-# 敏感密钥建议通过命令设置 (wrangler secret put <KEY>):
-# - DINGTALK_WEBHOOK: 钉钉机器人 Webhook 地址 (https://oapi.dingtalk.com/robot/send?access_token=xxx)
-# - DINGTALK_SECRET: 钉钉机器人加签密钥 (以 SEC 开头)
-# - MJJ_API_KEY: mjj.today 个人设置中获取的 API 密钥
+# 敏感密钥配置项建议通过命令写入 (wrangler secret put <KEY>):
+# - DINGTALK_WEBHOOK: 钉钉机器人 Webhook (包含 access_token)
+# - DINGTALK_SECRET: 钉钉机器人加签密钥 (SEC开头)
+# - MJJ_API_KEY: mjj.today API密钥
+# - IP_PRISM_KEY: ip-prism API密钥 (如: tokisaki-galaxy)
