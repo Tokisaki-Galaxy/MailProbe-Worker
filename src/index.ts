@@ -8,6 +8,43 @@ import { renderHtml } from "./ui/index";
 const TRANSPARENT_GIF_BASE64 = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const TRANSPARENT_GIF_BYTES = Uint8Array.from(atob(TRANSPARENT_GIF_BASE64), c => c.charCodeAt(0));
 
+// ==========================================
+// Probe 元数据 V8 内存微缓存 (TTL: 60s)
+// 避免同机房多次探针请求反复查询底层 KV 存储
+// ==========================================
+interface MemoryCacheItem {
+  data: ProbeMetadata | null;
+  expiresAt: number;
+}
+const probeMemoryCache = new Map<string, MemoryCacheItem>();
+
+function getProbeFromMemory(id: string): { hit: boolean; probe: ProbeMetadata | null } {
+  const item = probeMemoryCache.get(id);
+  if (item && item.expiresAt > Date.now()) {
+    return { hit: true, probe: item.data };
+  }
+  if (item) {
+    probeMemoryCache.delete(id);
+  }
+  return { hit: false, probe: null };
+}
+
+function setProbeToMemory(id: string, probe: ProbeMetadata | null, ttlSec = 60): void {
+  // 控制内存容量，避免极端大量探针导致 Worker 内存泄漏
+  if (probeMemoryCache.size > 2000) {
+    const oldestKey = probeMemoryCache.keys().next().value;
+    if (oldestKey) probeMemoryCache.delete(oldestKey);
+  }
+  probeMemoryCache.set(id, {
+    data: probe,
+    expiresAt: Date.now() + ttlSec * 1000
+  });
+}
+
+function invalidateProbeMemory(id: string): void {
+  probeMemoryCache.delete(id);
+}
+
 // 辅助管理探针索引
 async function getProbeIndex(kv?: KVNamespace): Promise<string[]> {
   if (!kv) return [];
@@ -189,6 +226,7 @@ export default {
 
         await env.MAILPROBE_KV.delete(`probe:${probeId}`);
         await removeProbeFromIndex(probeId, env.MAILPROBE_KV);
+        invalidateProbeMemory(probeId);
       }
 
       return Response.json({ success: true, probeId });
@@ -219,12 +257,18 @@ export default {
       const isDownload = url.searchParams.get("download") === "1";
 
       let probe: ProbeMetadata | null = null;
-      if (env.MAILPROBE_KV && probeId) {
-        const raw = await env.MAILPROBE_KV.get(`probe:${probeId}`);
-        if (raw) {
-          try {
-            probe = JSON.parse(raw) as ProbeMetadata;
-          } catch (e) {}
+      if (probeId) {
+        const memCached = getProbeFromMemory(probeId);
+        if (memCached.hit) {
+          probe = memCached.probe;
+        } else if (env.MAILPROBE_KV) {
+          const raw = await env.MAILPROBE_KV.get(`probe:${probeId}`);
+          if (raw) {
+            try {
+              probe = JSON.parse(raw) as ProbeMetadata;
+            } catch (e) {}
+          }
+          setProbeToMemory(probeId, probe, 60);
         }
       }
 
@@ -255,7 +299,7 @@ export default {
         hour12: false
       }).format(now);
 
-      // 【核心极致性能优化】：将 ip-prism 外部网络请求、多源解析、KV 日志持久化和钉钉告警
+      // 将 ip-prism 外部网络请求、多源解析、KV 日志持久化和钉钉告警
       // 全部移入 ctx.waitUntil 后台并行执行，图片响应 0 毫秒阻塞，彻底解决加载等待！
       ctx.waitUntil(
         (async () => {
@@ -354,14 +398,16 @@ export default {
         })()
       );
 
-      // 核心防客户端与中间代理缓存响应头（保证收件人每次打开邮件都会触发新请求）
-      const antiCacheHeaders = {
+      // 核心防客户端与中间代理缓存响应头（保证收件人每次打开邮件都会发起真实 HTTP 请求）
+      const antiCacheHeaders: Record<string, string> = {
         "Cache-Control": "no-cache, no-store, must-revalidate, proxy-revalidate, max-age=0",
         "Pragma": "no-cache",
         "Expires": "0"
       };
 
-      // 1. R2 存储（支持 Cloudflare 边缘 Cache API 极速加速）
+      const ifNoneMatch = request.headers.get("if-none-match");
+
+      // 1. R2 存储（流式 zero-copy 管道与边缘 Cache API）
       if (probe?.backend === "r2" && probe.r2Key && env.MAILPROBE_R2) {
         // 尝试从边缘 Cache 中读取（若处于 Node 测试环境则容错跳过）
         const cacheKey = `https://r2-internal-cache.mailprobe.local/${probe.r2Key}`;
@@ -376,6 +422,19 @@ export default {
           try {
             const cachedRes = await cache.match(cacheKey);
             if (cachedRes) {
+              const etag = cachedRes.headers.get("etag");
+              // 客户端命中 ETag，在日志已完整记录前提下极速返回 304 (0 字节负载)
+              if (ifNoneMatch && etag && ifNoneMatch === etag) {
+                return new Response(null, {
+                  status: 304,
+                  headers: {
+                    etag,
+                    ...antiCacheHeaders,
+                    "X-MailProbe-Cache": "HIT-304"
+                  }
+                });
+              }
+
               const resHeaders = new Headers(cachedRes.headers);
               for (const [k, v] of Object.entries(antiCacheHeaders)) {
                 resHeaders.set(k, v);
@@ -391,30 +450,40 @@ export default {
 
         const object = await env.MAILPROBE_R2.get(probe.r2Key);
         if (object) {
-          const headers = new Headers();
-          object.writeHttpMetadata(headers);
-          if (object.httpEtag) {
-            headers.set("etag", object.httpEtag);
+          const etag = object.httpEtag;
+          // 首次穿透 R2 物理存储命中 ETag 304
+          if (ifNoneMatch && etag && ifNoneMatch === etag && !isDownload) {
+            return new Response(null, {
+              status: 304,
+              headers: {
+                etag,
+                ...antiCacheHeaders,
+                "X-MailProbe-Cache": "MISS-304"
+              }
+            });
           }
 
-          // 如果支持缓存，写入当前边缘节点的 Cache API
-          if (cache && !isDownload) {
+          const headers = new Headers();
+          object.writeHttpMetadata(headers);
+          if (etag) {
+            headers.set("etag", etag);
+          }
+
+          // 用 ReadableStream.tee() 零拷贝纯流式管道，避免 arrayBuffer 堆内存拷贝与阻塞
+          if (cache && !isDownload && object.body) {
             try {
-              const buffer = await object.arrayBuffer();
-              const toCacheRes = new Response(buffer, {
-                headers: {
-                  "Content-Type": headers.get("Content-Type") || "image/png",
-                  "Cache-Control": "public, max-age=86400"
-                }
-              });
+              const [streamForClient, streamForCache] = object.body.tee();
+              const cacheHeaders = new Headers(headers);
+              cacheHeaders.set("Cache-Control", "public, max-age=86400");
+              const toCacheRes = new Response(streamForCache, { headers: cacheHeaders });
               ctx.waitUntil(cache.put(cacheKey, toCacheRes));
 
-              // 组装返回给客户端的防缓存响应
+              // 组装返回给客户端的防缓存流式响应
               for (const [k, v] of Object.entries(antiCacheHeaders)) {
                 headers.set(k, v);
               }
               headers.set("X-MailProbe-Cache", "MISS");
-              return new Response(buffer, { headers });
+              return new Response(streamForClient, { headers });
             } catch (e) {}
           }
 
@@ -438,6 +507,19 @@ export default {
             }
           });
           if (originRes.ok && originRes.body) {
+            const etag = originRes.headers.get("etag");
+            // mjj.today 同样支持 ETag 304 快速回执
+            if (ifNoneMatch && etag && ifNoneMatch === etag && !isDownload) {
+              return new Response(null, {
+                status: 304,
+                headers: {
+                  etag,
+                  ...antiCacheHeaders,
+                  "X-MailProbe-Cache": "PROXY-304"
+                }
+              });
+            }
+
             const headers = new Headers(originRes.headers);
             for (const [k, v] of Object.entries(antiCacheHeaders)) {
               headers.set(k, v);

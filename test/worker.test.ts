@@ -244,4 +244,52 @@ describe("MailProbe-Worker 全功能测试", () => {
     expect(logs[0].providers[0].location).toBe("中国 · 江苏 · 南京");
     expect(logs[0].providers[0].isp).toContain("4134");
   });
+
+  it("客户端带 If-None-Match 请求 R2 时，依然记录日志并返回 304 快速回执", async () => {
+    const env: Env = {
+      MAILPROBE_KV: mockKV,
+      MAILPROBE_R2: mockR2
+    };
+
+    // 在 R2 中准备图片
+    await mockR2.put("probes/etag_test.png", new ArrayBuffer(16));
+    const probe: ProbeMetadata = {
+      id: "probe_etag",
+      filename: "etag_test.png",
+      note: "ETag测试",
+      backend: "r2",
+      r2Key: "probes/etag_test.png",
+      contentType: "image/png",
+      createdAt: new Date().toISOString(),
+      hits: 0
+    };
+    await mockKV.put("probe:probe_etag", JSON.stringify(probe));
+
+    // 先模拟获取一次 ETag
+    const r2Obj = await mockR2.get("probes/etag_test.png");
+    const etag = r2Obj.httpEtag;
+
+    const waitUntilMock = vi.fn();
+    const req = new Request("https://mailprobe.example.com/i/probe_etag.png", {
+      headers: {
+        "If-None-Match": etag,
+        "CF-Connecting-IP": "1.1.1.1",
+        "User-Agent": "MailClient/1.0"
+      }
+    });
+
+    const res = await worker.fetch(req, env, { waitUntil: waitUntilMock } as any);
+    expect(res.status).toBe(304);
+    expect(res.headers.get("etag")).toBe(etag);
+
+    // 确保异步日志记录仍然照常被触发
+    expect(waitUntilMock).toHaveBeenCalled();
+    const asyncTask = waitUntilMock.mock.calls[0][0];
+    await asyncTask;
+
+    const rawLogs = await mockKV.get("logs:recent");
+    const logs = JSON.parse(rawLogs);
+    expect(logs.length).toBe(1);
+    expect(logs[0].probeId).toBe("probe_etag");
+  });
 });
