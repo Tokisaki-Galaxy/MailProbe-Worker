@@ -25,6 +25,12 @@ export interface ProbeMetadata {
   lastHitAt?: string;
 }
 
+export interface IpProviderRecord {
+  name: string;      // 例如 "Cloudflare 边缘", "高德开放平台", "纯真 CZ88"
+  location: string;  // 格式化后的位置描述
+  isp?: string;      // 运营商或 AS 信息
+}
+
 export interface ProbeTriggerLog {
   logId: string;
   probeId: string;
@@ -42,6 +48,7 @@ export interface ProbeTriggerLog {
   timestamp: string;
   isDownload: boolean;
   provider?: string; // "ip-prism" | "cloudflare"
+  providers?: IpProviderRecord[]; // 多源 Provider 解析比对列表
 }
 
 export interface DingTalkAlertData {
@@ -55,6 +62,7 @@ export interface DingTalkAlertData {
   timeStr: string;
   isDownload: boolean;
   provider?: string;
+  providers?: IpProviderRecord[];
 }
 
 export interface IpPrismResult {
@@ -66,4 +74,15 @@ export interface IpPrismResult {
     city?: { value?: string };
     isp?: { value?: string };
   };
+  sources?: Array<{
+    name?: string;
+    source?: string;
+    location?: string;
+    country?: string;
+    region?: string;
+    city?: string;
+    isp?: string;
+    asn?: string | number;
+  }>;
+  providers?: Record<string, any>;
 }

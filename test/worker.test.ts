@@ -192,4 +192,56 @@ describe("MailProbe-Worker 全功能测试", () => {
     // 验证 KV 探针记录已注销
     expect(await mockKV.get("probe:probe_mjj")).toBeNull();
   });
+
+  it("探针触发时正确记录 Cloudflare 边缘源及多源比对数据", async () => {
+    const env: Env = {
+      MAILPROBE_KV: mockKV
+    };
+
+    const probe: ProbeMetadata = {
+      id: "probe_trigger_test",
+      filename: "test.png",
+      note: "测试多源探针",
+      backend: "r2",
+      contentType: "image/png",
+      createdAt: new Date().toISOString(),
+      hits: 0
+    };
+    await mockKV.put("probe:probe_trigger_test", JSON.stringify(probe));
+
+    const waitUntilMock = vi.fn();
+    const req = new Request("https://mailprobe.example.com/i/probe_trigger_test.png", {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "CF-Connecting-IP": "114.114.114.114"
+      }
+    });
+    // 注入 Cloudflare 边缘上下文模拟属性
+    (req as any).cf = {
+      country: "中国",
+      region: "江苏",
+      city: "南京",
+      asOrganization: "中国电信",
+      asn: 4134
+    };
+
+    const res = await worker.fetch(req, env, { waitUntil: waitUntilMock } as any);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("image/gif");
+
+    // 触发 waitUntil 执行写入 KV
+    expect(waitUntilMock).toHaveBeenCalled();
+    const asyncTask = waitUntilMock.mock.calls[0][0];
+    await asyncTask;
+
+    const rawLogs = await mockKV.get("logs:recent");
+    expect(rawLogs).toBeDefined();
+    const logs = JSON.parse(rawLogs);
+    expect(logs.length).toBe(1);
+    expect(logs[0].providers).toBeDefined();
+    expect(logs[0].providers.length).toBe(1);
+    expect(logs[0].providers[0].name).toBe("Cloudflare 边缘");
+    expect(logs[0].providers[0].location).toBe("中国 · 江苏 · 南京");
+    expect(logs[0].providers[0].isp).toContain("4134");
+  });
 });

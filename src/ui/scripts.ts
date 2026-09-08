@@ -3,6 +3,7 @@ export const scripts = `
     let selectedFile = null;
     let serverConfig = {};
     let probeToDelete = null;
+    let cachedLogs = [];
 
     function showToast(msg) {
       const toast = document.getElementById('toast');
@@ -272,18 +273,24 @@ export const scripts = `
       try {
         const res = await fetch(API_BASE + '/logs');
         const logs = await res.json();
+        cachedLogs = Array.isArray(logs) ? logs : [];
 
-        if (!logs || logs.length === 0) {
+        if (!cachedLogs || cachedLogs.length === 0) {
           tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无探针触发记录</td></tr>';
           return;
         }
 
-        tbody.innerHTML = logs.map(log => {
+        tbody.innerHTML = cachedLogs.map((log, index) => {
+          let locationHtml = escapeHtml(log.country + ' · ' + log.region + ' · ' + log.city);
+          if (log.providers && Array.isArray(log.providers) && log.providers.length > 1) {
+            locationHtml += ' <button class="btn-compare" onclick="openProvidersModal(' + index + ')">多源 (' + log.providers.length + ')</button>';
+          }
+
           return '<tr>' +
             '<td style="white-space:nowrap; font-family:var(--font-mono); font-size:12px;">' + (log.timestamp || '-') + '</td>' +
             '<td><strong style="color:var(--text-main);">' + (escapeHtml(log.note) || '无备注') + '</strong><br><span style="font-size:0.75rem;color:var(--text-dim);">' + escapeHtml(log.filename) + '</span></td>' +
             '<td><span class="tag tag-ip">' + log.ip + '</span></td>' +
-            '<td><span class="tag tag-location">' + (escapeHtml(log.country) + ' · ' + escapeHtml(log.region) + ' · ' + escapeHtml(log.city)) + '</span></td>' +
+            '<td><span class="tag tag-location">' + locationHtml + '</span></td>' +
             '<td>' + escapeHtml(log.isp || '未知') + '</td>' +
             '<td><span style="color:var(--text-main); font-size:12px;">' + escapeHtml(log.clientType) + '</span></td>' +
           '</tr>';
@@ -291,6 +298,23 @@ export const scripts = `
       } catch (err) {
         tbody.innerHTML = '<tr><td colspan="6" class="empty-state" style="color:var(--danger)">加载历史记录失败</td></tr>';
       }
+    }
+
+    function openProvidersModal(index) {
+      const log = cachedLogs[index];
+      if (!log || !log.providers) return;
+
+      document.getElementById('compare-ip').textContent = log.ip;
+      const tbody = document.getElementById('compare-tbody');
+      tbody.innerHTML = log.providers.map(p => {
+        return '<tr>' +
+          '<td><strong>' + escapeHtml(p.name) + '</strong></td>' +
+          '<td>' + escapeHtml(p.location) + '</td>' +
+          '<td>' + escapeHtml(p.isp || '—') + '</td>' +
+        '</tr>';
+      }).join('');
+
+      openModal('modal-providers');
     }
 
     async function clearLogs() {

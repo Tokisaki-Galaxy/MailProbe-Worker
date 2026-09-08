@@ -229,6 +229,36 @@ export function renderBody(appTitle: string): string {
     </div>
   </div>
 
+  <!-- 多源定位对比弹窗 -->
+  <div class="modal-overlay" id="modal-providers">
+    <div class="modal-card" style="max-width: 580px;">
+      <div class="modal-header">
+        <div class="modal-title">多源 IP 定位结果比对</div>
+        <button class="modal-close" onclick="closeModal('modal-providers')">&times;</button>
+      </div>
+      <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+        目标 IP: <code id="compare-ip" style="font-family: var(--font-mono); color: var(--primary); font-weight: 600;"></code>
+      </div>
+      <div class="table-container" style="margin-top: 0; max-height: 320px; overflow-y: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 28%;">数据源 / 提供商</th>
+              <th style="width: 44%;">解析位置</th>
+              <th style="width: 28%;">运营商 / 网络</th>
+            </tr>
+          </thead>
+          <tbody id="compare-tbody">
+            <!-- 动态填充对比数据 -->
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-providers')">关闭</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
   `;
 }

@@ -65,14 +65,24 @@ export async function sendDingTalkAlert(
 
     const title = data.isDownload ? "[通知] 探针图片被主动下载" : "[通知] 邮件图片探针被加载";
 
-    const providerText = data.provider ? ` (来源: ${data.provider})` : "";
+    const providerText = data.provider ? ` (主推: ${data.provider})` : "";
+
+    // 优雅拼接多源参考摘要（紧凑一行展示）
+    let multiProvidersLine = "";
+    if (data.providers && data.providers.length > 1) {
+      const summaryList = data.providers.map(p => {
+        const ispStr = p.isp ? ` ${p.isp}` : "";
+        return `${p.name}: ${p.location}${ispStr}`;
+      });
+      multiProvidersLine = `\n- **多源对比**：\n  > ${summaryList.join("  \n  > ")}`;
+    }
 
     const markdownText = `### ${title}
 ---
 - **探针备注**：${data.note || "未设置备注"}
 - **对应文件**：\`${data.filename}\`
 - **来源 IP**：\`${data.ip}\`
-- **地理位置**：${data.location}${providerText}
+- **地理位置**：${data.location}${providerText}${multiProvidersLine}
 - **网络运营商**：${data.isp}
 - **设备环境**：${data.clientType}
 - **触发时间**：${data.timeStr}

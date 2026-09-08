@@ -514,6 +514,29 @@ export const styles = `
       border: 1px solid #d1fae5;
     }
 
+    .btn-compare {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.68rem;
+      font-weight: 500;
+      background: #f1f5f9;
+      color: #334155;
+      border: 1px solid #cbd5e1;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      margin-left: 0.35rem;
+      vertical-align: middle;
+    }
+
+    .btn-compare:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+      border-color: #94a3b8;
+    }
+
     .empty-state {
       padding: 2.25rem 1rem;
       text-align: center;

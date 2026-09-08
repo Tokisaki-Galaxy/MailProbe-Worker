@@ -241,8 +241,18 @@ export default {
       const asn = request.cf?.asn as number | undefined;
       let locationSummary = `${country} · ${region} · ${city}`;
       let provider = "Cloudflare 原生";
+      const providersList: Array<{ name: string; location: string; isp?: string }> = [];
 
-      // 如果配置了 ip-prism，尝试高精度解析
+      const cfLoc = [country, region, city].filter(c => c && c !== "未知").join(" · ");
+      if (cfLoc) {
+        providersList.push({
+          name: "Cloudflare 边缘",
+          location: cfLoc,
+          isp: isp !== "未知运营商" ? (asn ? `${isp} (AS${asn})` : isp) : (asn ? `AS${asn}` : undefined)
+        });
+      }
+
+      // 如果配置了 ip-prism，尝试高精度多源解析
       if (env.IP_PRISM_URL && env.IP_PRISM_KEY) {
         try {
           const prismRes = await lookupIpWithPrism(env.IP_PRISM_URL, env.IP_PRISM_KEY, ip);
@@ -253,6 +263,9 @@ export default {
             if (prismRes.isp) isp = prismRes.isp;
             if (prismRes.location) locationSummary = prismRes.location;
             provider = "ip-prism";
+            if (prismRes.providers && prismRes.providers.length > 0) {
+              providersList.push(...prismRes.providers);
+            }
           }
         } catch (e) {
           // 优雅降级保持原生数据
@@ -297,7 +310,8 @@ export default {
                 referer,
                 timestamp: timeStr,
                 isDownload,
-                provider
+                provider,
+                providers: providersList.length > 0 ? providersList : undefined
               };
               logs.unshift(newLog);
               await env.MAILPROBE_KV.put("logs:recent", JSON.stringify(logs.slice(0, 100)));
@@ -326,7 +340,8 @@ export default {
           clientType,
           timeStr,
           isDownload,
-          provider
+          provider,
+          providers: providersList.length > 0 ? providersList : undefined
         };
 
         ctx.waitUntil(
