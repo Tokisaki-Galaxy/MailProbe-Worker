@@ -1,17 +1,26 @@
 name = "mailprobe-worker"
 main = "src/index.ts"
-compatibility_date = "2024-12-30"
+compatibility_date = "2025-11-17"
 
 # KV 命名空间绑定 (存储探针元数据与触发日志)
 [[kv_namespaces]]
 binding = "MAILPROBE_KV"
-id = "YOUR_KV_NAMESPACE_ID"
-preview_id = "YOUR_PREVIEW_KV_ID"
+id = "7014ab83fb15433084f0c74ba7199ee7"
 
 # R2 存储桶绑定 (可选：使用 Cloudflare R2 存储)
-# [[r2_buckets]]
-# binding = "MAILPROBE_R2"
-# bucket_name = "mailprobe-images"
+[[r2_buckets]]
+binding = "MAILPROBE_R2"
+bucket_name = "mailprobe-r2"
+
+[placement]
+mode = "smart"
+
+[observability]
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
 
 [vars]
 APP_TITLE = "MailProbe 邮件探针"
