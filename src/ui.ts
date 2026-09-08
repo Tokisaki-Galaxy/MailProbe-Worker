@@ -13,24 +13,25 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-base: #0a0e17;
-      --bg-surface: #111827;
-      --bg-card: rgba(17, 24, 39, 0.7);
-      --border-color: rgba(255, 255, 255, 0.08);
-      --border-focus: rgba(99, 102, 241, 0.5);
-      --primary: #6366f1;
-      --primary-hover: #4f46e5;
-      --primary-glow: rgba(99, 102, 241, 0.25);
-      --text-main: #f3f4f6;
-      --text-muted: #9ca3af;
-      --text-dim: #6b7280;
-      --success: #10b981;
-      --success-bg: rgba(16, 185, 129, 0.1);
-      --warning: #f59e0b;
-      --danger: #ef4444;
-      --danger-bg: rgba(239, 68, 68, 0.1);
-      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      --font-mono: 'JetBrains Mono', monospace;
+      --bg-base: #f8fafc;
+      --bg-surface: #ffffff;
+      --bg-card: #ffffff;
+      --border-color: #e2e8f0;
+      --border-focus: #2563eb;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-glow: rgba(37, 99, 235, 0.12);
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --text-dim: #94a3b8;
+      --success: #059669;
+      --success-bg: #ecfdf5;
+      --warning: #d97706;
+      --warning-bg: #fffbeb;
+      --danger: #dc2626;
+      --danger-bg: #fef2f2;
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
     }
 
     * {
@@ -42,14 +43,15 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
     body {
       background-color: var(--bg-base);
       background-image: 
-        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.12) 0%, transparent 40%),
-        radial-gradient(circle at 85% 75%, rgba(16, 185, 129, 0.08) 0%, transparent 45%);
+        radial-gradient(circle at 10% 10%, rgba(37, 99, 235, 0.03) 0%, transparent 40%),
+        radial-gradient(circle at 90% 90%, rgba(5, 150, 105, 0.03) 0%, transparent 45%);
       color: var(--text-main);
       font-family: var(--font-sans);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
     }
 
     header {
@@ -58,13 +60,13 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
       position: sticky;
       top: 0;
       z-index: 50;
-      background: rgba(10, 14, 23, 0.75);
+      background: rgba(255, 255, 255, 0.85);
     }
 
     .header-inner {
       max-width: 1100px;
       margin: 0 auto;
-      padding: 1rem 1.5rem;
+      padding: 0.9rem 1.5rem;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -75,19 +77,20 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
       align-items: center;
       gap: 0.75rem;
       font-weight: 700;
-      font-size: 1.15rem;
+      font-size: 1.125rem;
       letter-spacing: -0.02em;
+      color: var(--text-main);
     }
 
     .brand-icon {
-      width: 34px;
-      height: 34px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, var(--primary), #a855f7);
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--primary), #3b82f6);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 0 16px var(--primary-glow);
+      box-shadow: 0 2px 6px var(--primary-glow);
     }
 
     .brand-icon svg {
@@ -99,7 +102,7 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
     .header-badges {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
+      gap: 0.6rem;
     }
 
     .status-badge {
@@ -107,9 +110,10 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
       align-items: center;
       gap: 0.4rem;
       font-size: 0.75rem;
+      font-weight: 500;
       padding: 0.25rem 0.65rem;
       border-radius: 9999px;
-      background: rgba(255, 255, 255, 0.04);
+      background: #f1f5f9;
       border: 1px solid var(--border-color);
       color: var(--text-muted);
     }
@@ -119,7 +123,7 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
       height: 6px;
       border-radius: 50%;
       background: var(--success);
-      box-shadow: 0 0 8px var(--success);
+      box-shadow: 0 0 6px rgba(5, 150, 105, 0.4);
     }
 
     main {
@@ -130,16 +134,15 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
       padding: 2rem 1.5rem 4rem;
       display: flex;
       flex-direction: column;
-      gap: 2rem;
+      gap: 1.75rem;
     }
 
     .glass-card {
       background: var(--bg-card);
       border: 1px solid var(--border-color);
-      border-radius: 16px;
+      border-radius: 14px;
       padding: 1.75rem;
-      backdrop-filter: blur(16px);
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
     }
 
     .section-header {
@@ -150,18 +153,19 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
     }
 
     .section-title {
-      font-size: 1.15rem;
+      font-size: 1.05rem;
       font-weight: 600;
       letter-spacing: -0.01em;
       display: flex;
       align-items: center;
       gap: 0.5rem;
+      color: var(--text-main);
     }
 
     .section-title svg {
       color: var(--primary);
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
     }
 
     .form-group {
@@ -170,23 +174,23 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
 
     label {
       display: block;
-      font-size: 0.85rem;
-      font-weight: 500;
+      font-size: 0.825rem;
+      font-weight: 600;
       color: var(--text-muted);
       margin-bottom: 0.5rem;
     }
 
     input[type="text"] {
       width: 100%;
-      padding: 0.75rem 1rem;
-      background: rgba(0, 0, 0, 0.3);
+      padding: 0.65rem 0.85rem;
+      background: #ffffff;
       border: 1px solid var(--border-color);
-      border-radius: 10px;
+      border-radius: 8px;
       color: var(--text-main);
       font-family: inherit;
-      font-size: 0.9rem;
+      font-size: 0.875rem;
       outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
+      transition: all 0.2s ease;
     }
 
     input[type="text"]:focus {
@@ -197,7 +201,7 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
     .storage-selector {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 1rem;
+      gap: 0.85rem;
       margin-top: 0.5rem;
     }
 
@@ -206,39 +210,40 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
       display: flex;
       flex-direction: column;
       padding: 1rem;
-      background: rgba(255, 255, 255, 0.02);
+      background: #ffffff;
       border: 1px solid var(--border-color);
-      border-radius: 12px;
+      border-radius: 10px;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.15s ease;
       user-select: none;
     }
 
     .storage-option:not(.disabled):hover {
-      background: rgba(255, 255, 255, 0.04);
-      border-color: rgba(99, 102, 241, 0.4);
+      border-color: #cbd5e1;
+      background: #f8fafc;
     }
 
     .storage-option.selected {
-      background: rgba(99, 102, 241, 0.08);
+      background: #eff6ff;
       border-color: var(--primary);
-      box-shadow: 0 0 16px var(--primary-glow);
+      box-shadow: 0 0 0 1px var(--primary);
     }
 
     .storage-option.disabled {
-      opacity: 0.45;
+      opacity: 0.55;
       cursor: not-allowed;
-      filter: grayscale(0.8);
-      background: rgba(0, 0, 0, 0.2);
+      background: #f8fafc;
+      border-color: #f1f5f9;
     }
 
     .storage-title {
       font-weight: 600;
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       display: flex;
       align-items: center;
       justify-content: space-between;
       margin-bottom: 0.35rem;
+      color: var(--text-main);
     }
 
     .storage-desc {
@@ -247,63 +252,68 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
     }
 
     .badge {
-      font-size: 0.65rem;
+      font-size: 0.68rem;
       padding: 0.15rem 0.45rem;
-      border-radius: 6px;
+      border-radius: 4px;
       font-weight: 600;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.01em;
     }
 
     .badge-success {
       background: var(--success-bg);
       color: var(--success);
-      border: 1px solid rgba(16, 185, 129, 0.3);
+      border: 1px solid #a7f3d0;
     }
 
     .badge-r2 {
-      background: rgba(99, 102, 241, 0.12);
-      color: #a5b4fc;
-      border: 1px solid rgba(99, 102, 241, 0.3);
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #bfdbfe;
     }
 
     .badge-mjj {
-      background: rgba(245, 158, 11, 0.12);
-      color: #fcd34d;
-      border: 1px solid rgba(245, 158, 11, 0.3);
+      background: #fffbeb;
+      color: #b45309;
+      border: 1px solid #fde68a;
     }
 
     .badge-disabled {
-      background: rgba(255, 255, 255, 0.05);
+      background: #f1f5f9;
       color: var(--text-dim);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid #e2e8f0;
     }
 
     .dropzone {
-      border: 2px dashed var(--border-color);
-      border-radius: 12px;
-      padding: 2.5rem 1.5rem;
+      border: 1.5px dashed #cbd5e1;
+      border-radius: 10px;
+      padding: 2.25rem 1.5rem;
       text-align: center;
-      background: rgba(0, 0, 0, 0.2);
+      background: #fafafa;
       cursor: pointer;
-      transition: all 0.25s;
+      transition: all 0.2s ease;
       position: relative;
+    }
+
+    .dropzone:hover {
+      border-color: #94a3b8;
+      background: #f8fafc;
     }
 
     .dropzone.dragover {
       border-color: var(--primary);
-      background: rgba(99, 102, 241, 0.06);
+      background: #eff6ff;
     }
 
     .dropzone-icon {
-      width: 44px;
-      height: 44px;
-      margin: 0 auto 0.75rem;
+      width: 36px;
+      height: 36px;
+      margin: 0 auto 0.65rem;
       color: var(--primary);
-      opacity: 0.8;
+      opacity: 0.85;
     }
 
     .dropzone-hint {
-      font-size: 0.85rem;
+      font-size: 0.825rem;
       color: var(--text-muted);
     }
 
@@ -316,10 +326,10 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
     }
 
     .preview-thumb {
-      width: 54px;
-      height: 54px;
+      width: 48px;
+      height: 48px;
       object-fit: cover;
-      border-radius: 8px;
+      border-radius: 6px;
       border: 1px solid var(--border-color);
     }
 
@@ -332,87 +342,94 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 0.5rem;
-      padding: 0.75rem 1.5rem;
-      border-radius: 10px;
+      gap: 0.4rem;
+      padding: 0.65rem 1.25rem;
+      border-radius: 8px;
       font-weight: 600;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       cursor: pointer;
       border: none;
-      transition: all 0.2s;
+      transition: all 0.15s ease;
       font-family: inherit;
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, var(--primary), #8b5cf6);
+      background: var(--primary);
       color: white;
-      box-shadow: 0 4px 14px var(--primary-glow);
+      box-shadow: 0 1px 3px rgba(37, 99, 235, 0.2);
       width: 100%;
       margin-top: 1.25rem;
     }
 
     .btn-primary:hover:not(:disabled) {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 20px var(--primary-glow);
+      background: var(--primary-hover);
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
     }
 
     .btn-primary:disabled {
-      opacity: 0.5;
+      opacity: 0.45;
       cursor: not-allowed;
     }
 
     .btn-secondary {
-      background: rgba(255, 255, 255, 0.05);
+      background: #ffffff;
       border: 1px solid var(--border-color);
-      color: var(--text-main);
-      padding: 0.4rem 0.75rem;
+      color: var(--text-muted);
+      padding: 0.35rem 0.7rem;
       font-size: 0.75rem;
-      border-radius: 8px;
+      border-radius: 6px;
     }
 
     .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.08);
+      background: #f8fafc;
+      color: var(--text-main);
+      border-color: #cbd5e1;
     }
 
     .btn-danger {
       background: var(--danger-bg);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #fca5a5;
-      padding: 0.4rem 0.75rem;
+      border: 1px solid #fecaca;
+      color: var(--danger);
+      padding: 0.35rem 0.7rem;
       font-size: 0.75rem;
-      border-radius: 8px;
+      border-radius: 6px;
     }
 
     .btn-danger:hover {
-      background: rgba(239, 68, 68, 0.2);
+      background: #fee2e2;
     }
 
     .result-box {
       display: none;
-      margin-top: 1.5rem;
+      margin-top: 1.25rem;
       padding: 1.25rem;
-      border-radius: 12px;
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 10px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
     }
 
     .result-title {
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       font-weight: 600;
       color: var(--success);
       display: flex;
       align-items: center;
       gap: 0.4rem;
-      margin-bottom: 1rem;
+      margin-bottom: 0.85rem;
     }
 
     .copy-item {
-      margin-bottom: 0.85rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .copy-item:last-child {
+      margin-bottom: 0;
     }
 
     .copy-item label {
       font-size: 0.75rem;
-      color: var(--text-dim);
+      font-weight: 600;
+      color: var(--text-muted);
       margin-bottom: 0.25rem;
     }
 
@@ -423,89 +440,98 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
 
     .copy-input {
       flex: 1;
-      padding: 0.5rem 0.75rem;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      color: var(--text-muted);
+      padding: 0.45rem 0.65rem;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      color: var(--text-main);
       font-family: var(--font-mono);
       font-size: 0.78rem;
     }
 
     .btn-copy {
-      padding: 0.5rem 0.85rem;
-      background: rgba(99, 102, 241, 0.2);
-      border: 1px solid var(--primary);
-      color: #c7d2fe;
-      border-radius: 8px;
+      padding: 0.45rem 0.8rem;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      color: var(--text-main);
+      border-radius: 6px;
       cursor: pointer;
       font-size: 0.75rem;
+      font-weight: 500;
       white-space: nowrap;
-      transition: all 0.2s;
+      transition: all 0.15s ease;
     }
 
     .btn-copy:hover {
-      background: var(--primary);
-      color: white;
+      background: #f1f5f9;
+      border-color: #94a3b8;
     }
 
     .table-container {
       overflow-x: auto;
-      margin-top: 1rem;
+      margin-top: 0.75rem;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
     }
 
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       text-align: left;
     }
 
     th {
-      padding: 0.75rem 1rem;
-      color: var(--text-dim);
+      padding: 0.65rem 0.85rem;
+      color: var(--text-muted);
       font-weight: 600;
+      background: #f8fafc;
       border-bottom: 1px solid var(--border-color);
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       text-transform: uppercase;
       letter-spacing: 0.03em;
     }
 
     td {
-      padding: 0.85rem 1rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      padding: 0.75rem 0.85rem;
+      border-bottom: 1px solid #f1f5f9;
       color: var(--text-muted);
     }
 
+    tr:last-child td {
+      border-bottom: none;
+    }
+
     tr:hover td {
-      background: rgba(255, 255, 255, 0.015);
+      background: #f8fafc;
     }
 
     .tag {
       display: inline-block;
-      padding: 0.2rem 0.5rem;
-      border-radius: 6px;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
       font-size: 0.7rem;
       font-family: var(--font-mono);
+      font-weight: 500;
     }
 
     .tag-ip {
-      background: rgba(99, 102, 241, 0.1);
-      color: #a5b4fc;
-      border: 1px solid rgba(99, 102, 241, 0.2);
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #dbeafe;
     }
 
     .tag-location {
-      background: rgba(16, 185, 129, 0.1);
-      color: #6ee7b7;
-      border: 1px solid rgba(16, 185, 129, 0.2);
+      background: #ecfdf5;
+      color: #047857;
+      border: 1px solid #d1fae5;
     }
 
     .empty-state {
-      padding: 2.5rem 1rem;
+      padding: 2.25rem 1rem;
       text-align: center;
       color: var(--text-dim);
-      font-size: 0.85rem;
+      font-size: 0.825rem;
     }
 
     /* 模态框样式 */
@@ -516,8 +542,8 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
       left: 0;
       width: 100vw;
       height: 100vh;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(8px);
+      background: rgba(15, 23, 42, 0.4);
+      backdrop-filter: blur(4px);
       z-index: 200;
       align-items: center;
       justify-content: center;
@@ -528,13 +554,13 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
     }
 
     .modal-card {
-      background: #111827;
+      background: #ffffff;
       border: 1px solid var(--border-color);
-      border-radius: 16px;
-      padding: 1.75rem;
+      border-radius: 12px;
+      padding: 1.5rem;
       width: 90%;
-      max-width: 520px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+      max-width: 500px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
     }
 
     .modal-header {
@@ -545,7 +571,7 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
     }
 
     .modal-title {
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       font-weight: 600;
       color: var(--text-main);
     }
@@ -556,6 +582,7 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
       color: var(--text-dim);
       font-size: 1.25rem;
       cursor: pointer;
+      line-height: 1;
     }
 
     .modal-close:hover {
@@ -564,17 +591,18 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
 
     .checkbox-box {
       margin: 1.25rem 0;
-      padding: 1rem;
-      border-radius: 10px;
-      background: rgba(255, 255, 255, 0.02);
+      padding: 0.85rem;
+      border-radius: 8px;
+      background: #f8fafc;
       border: 1px solid var(--border-color);
     }
 
     .checkbox-label {
       display: flex;
       align-items: center;
-      gap: 0.6rem;
-      font-size: 0.88rem;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      font-weight: 500;
       color: var(--text-main);
       cursor: pointer;
     }
@@ -585,33 +613,34 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
     }
 
     .checkbox-tip {
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       color: var(--text-dim);
-      margin-top: 0.4rem;
+      margin-top: 0.35rem;
       line-height: 1.4;
     }
 
     .modal-footer {
       display: flex;
       justify-content: flex-end;
-      gap: 0.75rem;
-      margin-top: 1.5rem;
+      gap: 0.6rem;
+      margin-top: 1.25rem;
     }
 
     .toast {
       position: fixed;
       bottom: 2rem;
       right: 2rem;
-      padding: 0.75rem 1.25rem;
-      background: #1f2937;
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      color: var(--text-main);
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
-      font-size: 0.85rem;
+      padding: 0.65rem 1.15rem;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      color: #ffffff;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      font-size: 0.825rem;
+      font-weight: 500;
       transform: translateY(100px);
       opacity: 0;
-      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
       z-index: 300;
     }
 
@@ -772,7 +801,7 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
         </div>
         <div style="display: flex; gap: 0.5rem;">
           <button class="btn btn-secondary" onclick="fetchLogs()">刷新记录</button>
-          <button class="btn btn-secondary" onclick="clearLogs()" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.3);">清空历史</button>
+          <button class="btn btn-secondary" onclick="clearLogs()" style="color: var(--danger); border-color: #fecaca;">清空历史</button>
         </div>
       </div>
 
@@ -836,7 +865,7 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
         <div class="modal-title">删除探针确认</div>
         <button class="modal-close" onclick="closeModal('modal-delete')">&times;</button>
       </div>
-      <div style="font-size:0.9rem; color:var(--text-main); margin-bottom: 0.5rem;" id="modal-del-desc">
+      <div style="font-size:0.875rem; color:var(--text-main); margin-bottom: 0.5rem;" id="modal-del-desc">
         确定要删除该探针吗？
       </div>
       
@@ -1051,7 +1080,7 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
             : '<span class="badge badge-mjj">mjj.today</span>';
 
           return '<tr>' +
-            '<td style="white-space:nowrap;">' + dateStr + '</td>' +
+            '<td style="white-space:nowrap; font-family:var(--font-mono); font-size:12px;">' + dateStr + '</td>' +
             '<td><strong style="color:var(--text-main);">' + (escapeHtml(p.note) || '无备注') + '</strong></td>' +
             '<td>' + escapeHtml(p.filename) + '</td>' +
             '<td>' + backendBadge + '</td>' +
@@ -1135,12 +1164,12 @@ export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): st
 
         tbody.innerHTML = logs.map(log => {
           return '<tr>' +
-            '<td style="white-space:nowrap;">' + (log.timestamp || '-') + '</td>' +
+            '<td style="white-space:nowrap; font-family:var(--font-mono); font-size:12px;">' + (log.timestamp || '-') + '</td>' +
             '<td><strong style="color:var(--text-main);">' + (escapeHtml(log.note) || '无备注') + '</strong><br><span style="font-size:0.75rem;color:var(--text-dim);">' + escapeHtml(log.filename) + '</span></td>' +
             '<td><span class="tag tag-ip">' + log.ip + '</span></td>' +
             '<td><span class="tag tag-location">' + (escapeHtml(log.country) + ' · ' + escapeHtml(log.region) + ' · ' + escapeHtml(log.city)) + '</span></td>' +
             '<td>' + escapeHtml(log.isp || '未知') + '</td>' +
-            '<td><span style="color:var(--text-main);">' + escapeHtml(log.clientType) + '</span></td>' +
+            '<td><span style="color:var(--text-main); font-size:12px;">' + escapeHtml(log.clientType) + '</span></td>' +
           '</tr>';
         }).join('');
       } catch (err) {
