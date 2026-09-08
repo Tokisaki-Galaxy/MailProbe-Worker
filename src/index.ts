@@ -36,26 +36,36 @@ export default {
     const url = new URL(request.url);
     const pathname = url.pathname;
 
-    // 1. 首页控制台
+    // 规整管理后台前缀，默认为 /admin
+    const rawAdminPath = (env.ADMIN_PATH || "/admin").trim();
+    const adminPrefix = rawAdminPath.startsWith("/") ? rawAdminPath : `/${rawAdminPath}`;
+
+    // 1. 根路径重定向：访问根目录自动 302 跳转到管理后台 (受 Zero Trust 保护)
     if (pathname === "/" || pathname === "/index.html") {
+      return Response.redirect(`${url.origin}${adminPrefix}`, 302);
+    }
+
+    // 2. 管理控制台 UI 页面 (/admin 或 /admin/)
+    if (pathname === adminPrefix || pathname === `${adminPrefix}/` || pathname === `${adminPrefix}/index.html`) {
       const appTitle = env.APP_TITLE || "MailProbe 邮件探针";
-      return new Response(renderHtml(appTitle), {
+      return new Response(renderHtml(appTitle, adminPrefix), {
         headers: { "Content-Type": "text/html; charset=utf-8" }
       });
     }
 
-    // 2. 获取当前环境支持的配置
-    if (pathname === "/api/config" && request.method === "GET") {
+    // 3. 获取当前环境支持的配置
+    if ((pathname === `${adminPrefix}/api/config` || pathname === "/api/config") && request.method === "GET") {
       return Response.json({
         mjj: Boolean(env.MJJ_API_KEY && env.MJJ_API_KEY.trim().length > 0),
         r2: Boolean(env.MAILPROBE_R2),
         dingtalk: Boolean(env.DINGTALK_WEBHOOK && env.DINGTALK_SECRET),
-        ipPrism: Boolean(env.IP_PRISM_URL && env.IP_PRISM_KEY)
+        ipPrism: Boolean(env.IP_PRISM_URL && env.IP_PRISM_KEY),
+        adminPrefix
       });
     }
 
-    // 3. 上传图片并生成探针
-    if (pathname === "/api/upload" && request.method === "POST") {
+    // 4. 上传图片并生成探针
+    if ((pathname === `${adminPrefix}/api/upload` || pathname === "/api/upload") && request.method === "POST") {
       try {
         const formData = await request.formData();
         const file = formData.get("file") as File | null;
@@ -116,6 +126,7 @@ export default {
 
         const extMatch = file.name.match(/\.([a-zA-Z0-9]+)$/);
         const ext = extMatch ? extMatch[1].toLowerCase() : "png";
+        // 关键：探针公开下载地址保持在根级别 /i/ 下，完全不受 Zero Trust 子目录保护拦截
         const probeUrl = `${url.origin}/i/${probeId}.${ext}`;
 
         return Response.json({
@@ -131,8 +142,8 @@ export default {
       }
     }
 
-    // 4. 查询已创建的探针列表
-    if (pathname === "/api/probes" && request.method === "GET") {
+    // 5. 查询已创建的探针列表
+    if ((pathname === `${adminPrefix}/api/probes` || pathname === "/api/probes") && request.method === "GET") {
       if (!env.MAILPROBE_KV) {
         return Response.json([]);
       }
@@ -151,9 +162,10 @@ export default {
       return Response.json(probes);
     }
 
-    // 5. 删除探针接口（支持选择是否销毁 R2 源文件，非 R2 存储严格不删除源文件）
-    if (pathname.startsWith("/api/probes/") && request.method === "DELETE") {
-      const probeId = pathname.replace("/api/probes/", "").trim();
+    // 6. 删除探针接口（支持选择是否销毁 R2 源文件，非 R2 存储严格不删除源文件）
+    const isDeleteProbe = (pathname.startsWith(`${adminPrefix}/api/probes/`) || pathname.startsWith("/api/probes/")) && request.method === "DELETE";
+    if (isDeleteProbe) {
+      const probeId = pathname.replace(`${adminPrefix}/api/probes/`, "").replace("/api/probes/", "").trim();
       if (!probeId) {
         return Response.json({ success: false, error: "探针 ID 不能为空" }, { status: 400 });
       }
@@ -182,8 +194,8 @@ export default {
       return Response.json({ success: true, probeId });
     }
 
-    // 6. 获取探针触发历史记录
-    if (pathname === "/api/logs" && request.method === "GET") {
+    // 7. 获取探针触发历史记录
+    if ((pathname === `${adminPrefix}/api/logs` || pathname === "/api/logs") && request.method === "GET") {
       if (!env.MAILPROBE_KV) {
         return Response.json([]);
       }
@@ -192,8 +204,8 @@ export default {
       return Response.json(logs);
     }
 
-    // 7. 清空探针触发历史记录
-    if (pathname === "/api/logs" && request.method === "DELETE") {
+    // 8. 清空探针触发历史记录
+    if ((pathname === `${adminPrefix}/api/logs` || pathname === "/api/logs") && request.method === "DELETE") {
       if (env.MAILPROBE_KV) {
         await env.MAILPROBE_KV.delete("logs:recent");
       }

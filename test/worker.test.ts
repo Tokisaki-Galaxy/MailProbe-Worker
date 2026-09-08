@@ -55,23 +55,31 @@ describe("MailProbe-Worker 全功能测试", () => {
     mockR2 = createMockR2();
   });
 
-  it("GET / 返回不含低质 Emoji 的现代科技风 UI", async () => {
+  it("GET / 自动 302 重定向到 /admin，GET /admin 返回现代科技风 UI", async () => {
     const env: Env = {
       MAILPROBE_KV: mockKV,
       APP_TITLE: "邮件探针监控系统"
     };
 
-    const req = new Request("https://mailprobe.example.com/");
-    const res = await worker.fetch(req, env, { waitUntil: vi.fn() } as any);
+    // 1. 测试根路径重定向
+    const reqRoot = new Request("https://mailprobe.example.com/");
+    const resRoot = await worker.fetch(reqRoot, env, { waitUntil: vi.fn() } as any);
+    expect(resRoot.status).toBe(302);
+    expect(resRoot.headers.get("Location")).toBe("https://mailprobe.example.com/admin");
 
-    expect(res.status).toBe(200);
-    const html = await res.text();
+    // 2. 测试 /admin 页面渲染
+    const reqAdmin = new Request("https://mailprobe.example.com/admin");
+    const resAdmin = await worker.fetch(reqAdmin, env, { waitUntil: vi.fn() } as any);
+
+    expect(resAdmin.status).toBe(200);
+    const html = await resAdmin.text();
     expect(html).toContain("邮件探针监控系统");
     expect(html).toContain("历史上传探针管理");
     expect(html).toContain("探针触发历史记录");
+    expect(html).toContain('window.__ADMIN_PREFIX__ = "/admin"');
   });
 
-  it("GET /api/config 正确返回各项服务可用状态", async () => {
+  it("GET /admin/api/config 正确返回各项服务可用状态", async () => {
     const env: Env = {
       MAILPROBE_KV: mockKV,
       MJJ_API_KEY: "test_mjj_key",
@@ -79,7 +87,7 @@ describe("MailProbe-Worker 全功能测试", () => {
       IP_PRISM_KEY: "tokisaki-galaxy"
     };
 
-    const req = new Request("https://mailprobe.example.com/api/config");
+    const req = new Request("https://mailprobe.example.com/admin/api/config");
     const res = await worker.fetch(req, env, { waitUntil: vi.fn() } as any);
 
     expect(res.status).toBe(200);
@@ -99,7 +107,7 @@ describe("MailProbe-Worker 全功能测试", () => {
     expect(isPrivateIp("1.1.1.1")).toBe(false);
   });
 
-  it("POST /api/upload 上传并加入探针索引，GET /api/probes 列出探针", async () => {
+  it("POST /admin/api/upload 上传并加入探针索引，GET /admin/api/probes 列出探针", async () => {
     const env: Env = {
       MAILPROBE_KV: mockKV,
       MAILPROBE_R2: mockR2
@@ -110,7 +118,7 @@ describe("MailProbe-Worker 全功能测试", () => {
     formData.append("note", "测试方案图表");
     formData.append("backend", "r2");
 
-    const reqUpload = new Request("https://mailprobe.example.com/api/upload", {
+    const reqUpload = new Request("https://mailprobe.example.com/admin/api/upload", {
       method: "POST",
       body: formData
     });
@@ -122,7 +130,7 @@ describe("MailProbe-Worker 全功能测试", () => {
     const probeId = uploadData.probeId;
 
     // 检查列表查询
-    const reqList = new Request("https://mailprobe.example.com/api/probes");
+    const reqList = new Request("https://mailprobe.example.com/admin/api/probes");
     const resList = await worker.fetch(reqList, env, { waitUntil: vi.fn() } as any);
     const probes = (await resList.json()) as any[];
     expect(probes.length).toBe(1);
@@ -131,7 +139,7 @@ describe("MailProbe-Worker 全功能测试", () => {
     expect(probes[0].backend).toBe("r2");
   });
 
-  it("DELETE /api/probes/:id 支持按条件删除 R2 源文件，第三方图床严格不删除源文件", async () => {
+  it("DELETE /admin/api/probes/:id 支持按条件删除 R2 源文件，第三方图床严格不删除源文件", async () => {
     const env: Env = {
       MAILPROBE_KV: mockKV,
       MAILPROBE_R2: mockR2
@@ -152,7 +160,7 @@ describe("MailProbe-Worker 全功能测试", () => {
     await mockKV.put("probe:probe_r2", JSON.stringify(r2Probe));
     await mockKV.put("index:probes", JSON.stringify(["probe_r2"]));
 
-    const reqDelR2 = new Request("https://mailprobe.example.com/api/probes/probe_r2?deleteSource=true", {
+    const reqDelR2 = new Request("https://mailprobe.example.com/admin/api/probes/probe_r2?deleteSource=true", {
       method: "DELETE"
     });
     const resDelR2 = await worker.fetch(reqDelR2, env, { waitUntil: vi.fn() } as any);
@@ -176,7 +184,7 @@ describe("MailProbe-Worker 全功能测试", () => {
     await mockKV.put("probe:probe_mjj", JSON.stringify(mjjProbe));
     await mockKV.put("index:probes", JSON.stringify(["probe_mjj"]));
 
-    const reqDelMjj = new Request("https://mailprobe.example.com/api/probes/probe_mjj?deleteSource=true", {
+    const reqDelMjj = new Request("https://mailprobe.example.com/admin/api/probes/probe_mjj?deleteSource=true", {
       method: "DELETE"
     });
     const resDelMjj = await worker.fetch(reqDelMjj, env, { waitUntil: vi.fn() } as any);

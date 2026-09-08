@@ -1,10 +1,13 @@
-export function renderHtml(appTitle: string): string {
+export function renderHtml(appTitle: string, adminPrefix: string = "/admin"): string {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${appTitle}</title>
+  <script>
+    window.__ADMIN_PREFIX__ = "${adminPrefix}";
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -879,9 +882,11 @@ export function renderHtml(appTitle: string): string {
       document.getElementById(id)?.classList.remove('active');
     }
 
+    const API_BASE = (window.__ADMIN_PREFIX__ || '/admin') + '/api';
+
     async function initConfig() {
       try {
-        const res = await fetch('/api/config');
+        const res = await fetch(API_BASE + '/config');
         serverConfig = await res.json();
 
         // 钉钉状态
@@ -998,7 +1003,7 @@ export function renderHtml(appTitle: string): string {
       formData.append('backend', selectedBackend);
 
       try {
-        const res = await fetch('/api/upload', {
+        const res = await fetch(API_BASE + '/upload', {
           method: 'POST',
           body: formData
         });
@@ -1028,7 +1033,7 @@ export function renderHtml(appTitle: string): string {
     async function fetchProbes() {
       const tbody = document.getElementById('probes-tbody');
       try {
-        const res = await fetch('/api/probes');
+        const res = await fetch(API_BASE + '/probes');
         const probes = await res.json();
 
         if (!probes || probes.length === 0) {
@@ -1101,7 +1106,7 @@ export function renderHtml(appTitle: string): string {
       const deleteSource = chk ? chk.checked : false;
 
       try {
-        const res = await fetch('/api/probes/' + probeToDelete.id + '?deleteSource=' + deleteSource, {
+        const res = await fetch(API_BASE + '/probes/' + probeToDelete.id + '?deleteSource=' + deleteSource, {
           method: 'DELETE'
         });
         const data = await res.json();
@@ -1120,7 +1125,7 @@ export function renderHtml(appTitle: string): string {
     async function fetchLogs() {
       const tbody = document.getElementById('logs-tbody');
       try {
-        const res = await fetch('/api/logs');
+        const res = await fetch(API_BASE + '/logs');
         const logs = await res.json();
 
         if (!logs || logs.length === 0) {
@@ -1146,7 +1151,7 @@ export function renderHtml(appTitle: string): string {
     async function clearLogs() {
       if (!confirm('确定要清空所有探针触发历史记录吗？')) return;
       try {
-        await fetch('/api/logs', { method: 'DELETE' });
+        await fetch(API_BASE + '/logs', { method: 'DELETE' });
         showToast('历史记录已清空');
         fetchLogs();
       } catch (err) {

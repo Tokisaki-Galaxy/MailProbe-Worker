@@ -7,6 +7,7 @@ export interface Env {
   IP_PRISM_URL?: string;
   IP_PRISM_KEY?: string;
   APP_TITLE?: string;
+  ADMIN_PATH?: string; // 管理后台自定义路径前缀，默认为 /admin
 }
 
 export type StorageBackendType = "mjj" | "r2";

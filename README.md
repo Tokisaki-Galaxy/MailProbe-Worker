@@ -70,16 +70,18 @@ pnpm exec wrangler deploy
 
 ## Cloudflare Zero Trust (Access) 安全规则配置
 
-如需保护上传管理后台，且允许外部正常加载探针图片，只需在同一个 Zero Trust Application 中设置两条策略：
-
-1. **策略 1（放行探针图片，优先级排第一位）**：
-   - Action: `Bypass`
-   - Path: `/i/*`
-   - Include: `Everyone`
-2. **策略 2（保护管理控制台，优先级排第二位）**：
+1. **进入 Cloudflare Zero Trust 控制台** -> **Access** -> **Applications**。
+2. **Add an Application** -> 选择 **Self-hosted**。
+3. **Application configuration**：
+   - **Application name**：`MailProbe Admin`
+   - **Application domain**：填写你的子域名（如 `mail-image.api.tski.uk`）
+   - **Path**：填写 **`admin`**（或者 `admin*`）
+4. **Policy configuration**：
    - Action: `Allow`
-   - Path: *(留空，匹配所有其他路径)*
-   - Include: 你的登录邮箱或身份源
+   - Include: 你的登录邮箱或验证策略。
+5. **保存即可**：
+   - 进入 `https://mail-image.api.tski.uk/admin`（或访问根目录自动 302 跳转）时，Zero Trust 会强制拦截鉴权；
+   - 探针图片反代下载地址 `https://mail-image.api.tski.uk/i/*` 位于子目录外，完全公开免认证，收件人正常加载无任何阻碍！
 
 ---
 
