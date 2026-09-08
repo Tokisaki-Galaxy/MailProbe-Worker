@@ -3,7 +3,7 @@ import { parseUserAgent, sendDingTalkAlert } from "./dingtalk";
 import { lookupIpWithPrism } from "./ipprism";
 import { uploadToMjj } from "./storage/mjj";
 import { uploadToR2 } from "./storage/r2";
-import { renderHtml } from "./ui";
+import { renderHtml } from "./ui/index";
 
 const TRANSPARENT_GIF_BASE64 = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const TRANSPARENT_GIF_BYTES = Uint8Array.from(atob(TRANSPARENT_GIF_BASE64), c => c.charCodeAt(0));
