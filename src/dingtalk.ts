@@ -65,16 +65,14 @@ export async function sendDingTalkAlert(
 
     const title = data.isDownload ? "[通知] 探针图片被主动下载" : "[通知] 邮件图片探针被加载";
 
-    const providerText = data.provider ? ` (主推: ${data.provider})` : "";
-
-    // 优雅拼接多源参考摘要（紧凑一行展示）
-    let multiProvidersLine = "";
-    if (data.providers && data.providers.length > 1) {
-      const summaryList = data.providers.map(p => {
-        const ispStr = p.isp ? ` ${p.isp}` : "";
-        return `${p.name}: ${p.location}${ispStr}`;
-      });
-      multiProvidersLine = `\n- **多源对比**：\n  > ${summaryList.join("  \n  > ")}`;
+    // 格式化地理位置与来源标注
+    const providerTag = data.provider ? ` (${data.provider})` : "";
+    let locationLine = `- **地理位置**：${data.location}${providerTag}`;
+    if (data.compactComparison) {
+      locationLine += `\n- **多源参考**：${data.compactComparison}`;
+    } else if (data.providers && data.providers.length > 1) {
+      const summaryList = data.providers.slice(1, 4).map(p => `${p.name}: ${p.location}`);
+      locationLine += `\n- **多源参考**：${summaryList.join(" | ")}`;
     }
 
     // 格式化 16 位设备指纹与回访标识
@@ -91,7 +89,7 @@ export async function sendDingTalkAlert(
 - **探针备注**：${data.note || "未设置备注"}
 - **对应文件**：\`${data.filename}\`
 - **来源 IP**：\`${data.ip}\`
-- **地理位置**：${data.location}${providerText}${multiProvidersLine}
+${locationLine}
 - **网络运营商**：${data.isp}
 - **设备环境**：${data.clientType}${deviceFpLine}
 - **触发时间**：${data.timeStr}

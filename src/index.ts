@@ -1,6 +1,6 @@
 import { Env, ProbeMetadata, ProbeTriggerLog, StorageBackendType } from "./types";
 import { parseUserAgent, sendDingTalkAlert } from "./dingtalk";
-import { lookupIpWithPrism } from "./ipprism";
+import { lookupIpWithPrism, resolveLocationDetails } from "./ipprism";
 import { resolveDeviceFingerprint, extractDeviceFpFromIfNoneMatch } from "./fingerprint";
 import { uploadToMjj } from "./storage/mjj";
 import { uploadToR2 } from "./storage/r2";
@@ -18,6 +18,31 @@ interface MemoryCacheItem {
   expiresAt: number;
 }
 const probeMemoryCache = new Map<string, MemoryCacheItem>();
+
+// ==========================================
+// 单一设备告警防抖冷却锁 (L1 内存锁: 60s)
+// 键为 `probeId:deviceFp`，值为冷却到期毫秒时间戳
+// ==========================================
+const alertCooldownMemory = new Map<string, number>();
+
+function isAlertInCooldown(key: string): boolean {
+  const expiresAt = alertCooldownMemory.get(key);
+  if (expiresAt && expiresAt > Date.now()) {
+    return true;
+  }
+  if (expiresAt) {
+    alertCooldownMemory.delete(key);
+  }
+  return false;
+}
+
+function setAlertCooldown(key: string, ttlSec = 60): void {
+  if (alertCooldownMemory.size > 5000) {
+    const oldestKey = alertCooldownMemory.keys().next().value;
+    if (oldestKey) alertCooldownMemory.delete(oldestKey);
+  }
+  alertCooldownMemory.set(key, Date.now() + ttlSec * 1000);
+}
 
 function getProbeFromMemory(id: string): { hit: boolean; probe: ProbeMetadata | null } {
   const item = probeMemoryCache.get(id);
@@ -345,6 +370,19 @@ export default {
             }
           }
 
+          // 智能裁决高精位置与紧凑多源对比
+          const resolvedLoc = resolveLocationDetails(
+            providersList,
+            locationSummary,
+            asn ? `${isp} (AS${asn})` : isp
+          );
+          if (resolvedLoc.primaryLocation) {
+            locationSummary = resolvedLoc.primaryLocation;
+          }
+          if (resolvedLoc.primaryProvider) {
+            provider = resolvedLoc.primaryProvider;
+          }
+
           let visitCount = 1;
           let isRepeat = isCachedDevice;
 
@@ -397,27 +435,62 @@ export default {
             }
           }
 
-          // 异步发送钉钉加签告警
+          // 异步发送钉钉加签告警（引入单一设备 60 秒防抖冷却机制）
           if (env.DINGTALK_WEBHOOK && env.DINGTALK_SECRET) {
-            const alertData = {
-              note: probe?.note || "无备注探针",
-              filename: probe?.filename || `${probeId}.png`,
-              ip,
-              location: locationSummary,
-              isp: asn && !isp.includes("AS") ? `${isp} (AS${asn})` : isp,
-              userAgent,
-              clientType,
-              timeStr,
-              isDownload,
-              provider,
-              providers: providersList.length > 0 ? providersList : undefined,
-              deviceFp,
-              clientFp,
-              visitCount,
-              isRepeat
-            };
+            const cooldownKey = `cooldown:${probeId || "unknown"}:${deviceFp}`;
+            let shouldAlert = true;
 
-            await sendDingTalkAlert(env.DINGTALK_WEBHOOK, env.DINGTALK_SECRET, alertData);
+            // 1. L1 内存锁快速拦截（0 延迟防抖）
+            if (isAlertInCooldown(cooldownKey)) {
+              shouldAlert = false;
+            }
+
+            // 2. L2 分布式 KV 锁检查（跨边缘实例协同）
+            if (shouldAlert && env.MAILPROBE_KV) {
+              try {
+                const kvCooldown = await env.MAILPROBE_KV.get(cooldownKey);
+                if (kvCooldown) {
+                  shouldAlert = false;
+                  // 回填 L1 内存锁
+                  setAlertCooldown(cooldownKey, 60);
+                }
+              } catch (e) {
+                // KV 异常不阻断通知
+              }
+            }
+
+            if (shouldAlert) {
+              // 立即占位 L1 内存锁与 L2 KV 锁（TTL 60 秒）
+              setAlertCooldown(cooldownKey, 60);
+              if (env.MAILPROBE_KV) {
+                try {
+                  await env.MAILPROBE_KV.put(cooldownKey, "1", { expirationTtl: 60 });
+                } catch (e) {
+                  // 容错处理
+                }
+              }
+
+              const alertData = {
+                note: probe?.note || "无备注探针",
+                filename: probe?.filename || `${probeId}.png`,
+                ip,
+                location: locationSummary,
+                isp: asn && !isp.includes("AS") ? `${isp} (AS${asn})` : isp,
+                userAgent,
+                clientType,
+                timeStr,
+                isDownload,
+                provider,
+                providers: providersList.length > 0 ? providersList : undefined,
+                compactComparison: resolvedLoc.compactComparison,
+                deviceFp,
+                clientFp,
+                visitCount,
+                isRepeat
+              };
+
+              await sendDingTalkAlert(env.DINGTALK_WEBHOOK, env.DINGTALK_SECRET, alertData);
+            }
           }
         })()
       );

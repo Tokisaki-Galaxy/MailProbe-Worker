@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import worker from "../src/index";
-import { parseUserAgent } from "../src/dingtalk";
-import { isPrivateIp, lookupIpWithPrism } from "../src/ipprism";
+import { parseUserAgent, sendDingTalkAlert } from "../src/dingtalk";
+import { isPrivateIp, lookupIpWithPrism, resolveLocationDetails, extractProvidersFromPrism } from "../src/ipprism";
 import { Env, ProbeMetadata } from "../src/types";
 
 function createMockKV() {
@@ -433,5 +433,191 @@ describe("MailProbe-Worker 全功能测试", () => {
 
     expect(logs[2].visitCount).toBe(1);
     expect(logs[2].isRepeat).toBe(false);
+  });
+
+  it("地理位置智能裁决：国内高精优先，紧凑多源对比输出", () => {
+    const providers = [
+      { name: "高德地图", location: "江苏省南京市雨花台区", isp: "中国电信" },
+      { name: "纯真 IP", location: "江苏省南京市", isp: "电信骨干网" },
+      { name: "Cloudflare 边缘", location: "中国 · 江苏 · 南京", isp: "AS4134" }
+    ];
+
+    const result = resolveLocationDetails(providers, "中国 · 江苏 · 南京", "AS4134");
+    expect(result.primaryLocation).toBe("江苏省南京市雨花台区");
+    expect(result.primaryProvider).toBe("高德地图");
+    expect(result.compactComparison).toBe("纯真: 江苏省南京市 · 边缘: 中国 · 江苏 · 南京");
+  });
+
+  it("同一设备 60 秒内连续访问时触发冷却，钉钉告警只发送 1 次", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ errcode: 0, errmsg: "ok" })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env: Env = {
+      MAILPROBE_KV: mockKV,
+      DINGTALK_WEBHOOK: "https://oapi.dingtalk.com/robot/send?access_token=mock_token",
+      DINGTALK_SECRET: "mock_secret"
+    };
+
+    const probe: ProbeMetadata = {
+      id: "probe_cooldown_test",
+      filename: "cooldown.png",
+      note: "防抖告警测试",
+      backend: "r2",
+      contentType: "image/png",
+      createdAt: new Date().toISOString(),
+      hits: 0
+    };
+    await mockKV.put("probe:probe_cooldown_test", JSON.stringify(probe));
+
+    const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
+    const ip = "114.114.114.114";
+
+    // 第一次触发
+    const waitUntilMock1 = vi.fn();
+    const req1 = new Request("https://mailprobe.example.com/i/probe_cooldown_test.png", {
+      headers: {
+        "User-Agent": ua,
+        "CF-Connecting-IP": ip
+      }
+    });
+
+    const res1 = await worker.fetch(req1, env, { waitUntil: waitUntilMock1 } as any);
+    expect(res1.status).toBe(200);
+    expect(waitUntilMock1).toHaveBeenCalled();
+    await waitUntilMock1.mock.calls[0][0];
+
+    // 第一次必须触发钉钉发送
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // 第二次触发（抖动快速请求，间隔 < 60s）
+    const waitUntilMock2 = vi.fn();
+    const req2 = new Request("https://mailprobe.example.com/i/probe_cooldown_test.png", {
+      headers: {
+        "User-Agent": ua,
+        "CF-Connecting-IP": ip
+      }
+    });
+
+    const res2 = await worker.fetch(req2, env, { waitUntil: waitUntilMock2 } as any);
+    expect(res2.status).toBe(200);
+    expect(waitUntilMock2).toHaveBeenCalled();
+    await waitUntilMock2.mock.calls[0][0];
+
+    // 经过 60 秒设备冷却锁防抖拦截，钉钉仍应保持为 1 次，未发生告警风暴！
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // 验证日志正常记录为 2 条（解耦日志与通知）
+    const logs = JSON.parse(await mockKV.get("logs:recent"));
+    expect(logs.length).toBe(2);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("真实 ip-prism 线上结构解析：字典 sources 与服务端 best 字段融合", () => {
+    // 模拟真实线上返回的 52.94.236.248 数据结构
+    const realOverseasResponse = {
+      ip: "52.94.236.248",
+      sources: {
+        cz88: {
+          source: "cz88",
+          ok: true,
+          region: "美国–华盛顿州–金–西雅图",
+          org: "Amazon数据中心",
+          raw: { start: "52.94.248.15", end: "52.94.248.30" }
+        },
+        ipinfo: {
+          source: "ipinfo",
+          ok: true,
+          country: "US",
+          region: "Virginia",
+          city: "Ashburn",
+          asn: "AS16509",
+          org: "Amazon.com, Inc.",
+          lat: 39.0437,
+          lon: -77.4875
+        },
+        geolite: {
+          source: "geolite",
+          ok: true,
+          country: "US",
+          region: "Virginia",
+          city: "Ashburn",
+          lat: 39.0469,
+          lon: -77.4903,
+          asn: "AS16509",
+          org: "Amazon.com, Inc."
+        }
+      },
+      best: {
+        country: { value: "US", source: "geolite" },
+        region: { value: "Virginia", source: "geolite" },
+        city: { value: "Ashburn", source: "geolite" }
+      },
+      resolvedAt: 1789966375848,
+      pending: false,
+      summary: "US · Virginia · Ashburn"
+    };
+
+    // 提取并清洗 providers 列表
+    const providers = extractProvidersFromPrism(realOverseasResponse);
+    expect(providers.length).toBe(3);
+
+    const cz88 = providers.find(p => p.name === "纯真 CZ88");
+    expect(cz88).toBeDefined();
+    expect(cz88?.location).toBe("美国 · 华盛顿州 · 金 · 西雅图");
+    expect(cz88?.isp).toBe("Amazon数据中心");
+
+    const ipinfo = providers.find(p => p.name === "IPInfo");
+    expect(ipinfo).toBeDefined();
+    expect(ipinfo?.location).toBe("US · Virginia · Ashburn");
+    expect(ipinfo?.isp).toBe("Amazon.com, Inc.");
+
+    // 验证国内 IP：高德 + 纯真 + IPInfo
+    const realChinaResponse = {
+      ip: "220.181.38.148",
+      sources: {
+        cz88: {
+          source: "cz88",
+          ok: true,
+          country: "CN",
+          region: "中国–北京–北京",
+          org: "电信/IDC机房"
+        },
+        ipinfo: {
+          source: "ipinfo",
+          ok: true,
+          country: "CN",
+          region: "Beijing",
+          city: "Beijing",
+          asn: "AS23724",
+          org: "IDC, China Telecommunications Corporation"
+        },
+        amap: {
+          source: "amap",
+          ok: true,
+          region: "北京市"
+        }
+      },
+      best: {
+        country: { value: "CN", source: "geolite" },
+        region: { value: "北京市", source: "amap" },
+        city: { value: "北京", source: "cz88" },
+        isp: { value: "电信/IDC机房", source: "cz88" }
+      },
+      summary: "CN · 北京市 · 北京 · 电信/IDC机房"
+    };
+
+    const chinaProviders = extractProvidersFromPrism(realChinaResponse);
+    expect(chinaProviders.length).toBe(3);
+
+    const amap = chinaProviders.find(p => p.name === "高德开放平台");
+    expect(amap).toBeDefined();
+    expect(amap?.location).toBe("北京市");
+
+    // 验证高精度裁决（高德 > 纯真 > IPInfo）
+    const resolved = resolveLocationDetails(chinaProviders);
+    expect(resolved.primaryProvider).toBe("高德开放平台");
+    expect(resolved.primaryLocation).toBe("北京市");
+    expect(resolved.compactComparison).toContain("纯真");
   });
 });

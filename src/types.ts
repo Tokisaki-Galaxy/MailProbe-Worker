@@ -67,30 +67,36 @@ export interface DingTalkAlertData {
   isDownload: boolean;
   provider?: string;
   providers?: IpProviderRecord[];
+  compactComparison?: string;
   deviceFp?: string;
   clientFp?: string;
   visitCount?: number;
   isRepeat?: boolean;
 }
 
+export interface IpPrismSourceItem {
+  source?: string;
+  name?: string;
+  ok?: boolean;
+  country?: string;
+  region?: string;
+  city?: string;
+  org?: string;
+  isp?: string;
+  asn?: string | number;
+  location?: string;
+  [key: string]: any;
+}
+
 export interface IpPrismResult {
   ip: string;
   summary?: string;
   best?: {
-    country?: { value?: string };
-    region?: { value?: string };
-    city?: { value?: string };
-    isp?: { value?: string };
+    country?: { value?: string; source?: string };
+    region?: { value?: string; source?: string };
+    city?: { value?: string; source?: string };
+    isp?: { value?: string; source?: string };
   };
-  sources?: Array<{
-    name?: string;
-    source?: string;
-    location?: string;
-    country?: string;
-    region?: string;
-    city?: string;
-    isp?: string;
-    asn?: string | number;
-  }>;
+  sources?: Record<string, IpPrismSourceItem> | IpPrismSourceItem[];
   providers?: Record<string, any>;
 }
