@@ -295,9 +295,12 @@ export const scripts = `
         }
 
         tbody.innerHTML = cachedLogs.map((log, index) => {
-          let locationHtml = escapeHtml(log.country + ' · ' + log.region + ' · ' + log.city);
+          let locText = log.location || [log.country, log.region, log.city].filter(Boolean).join(' · ') || '未知位置';
+          let locationHtml = escapeHtml(locText);
           if (log.providers && Array.isArray(log.providers) && log.providers.length > 1) {
             locationHtml += ' <button class="btn-compare" onclick="openProvidersModal(' + index + ')">多源 (' + log.providers.length + ')</button>';
+          } else if (log.providers && Array.isArray(log.providers) && log.providers.length === 1 && log.providers[0].name === 'Cloudflare 边缘') {
+            locationHtml += ' <span style="font-size:10px; color:var(--text-dim);">(CF边缘)</span>';
           }
 
           let clientHtml = '<span style="color:var(--text-main); font-size:12px;">' + escapeHtml(log.clientType) + '</span>';

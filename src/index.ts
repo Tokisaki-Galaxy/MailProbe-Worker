@@ -350,11 +350,33 @@ export default {
             });
           }
 
-          // 异步高精度多源解析
+          // 异步高精度多源解析与 24 小时 KV 缓存
           if (env.IP_PRISM_URL && env.IP_PRISM_KEY) {
+            const ipCacheKey = `ipcache:${ip}`;
             try {
-              const prismRes = await lookupIpWithPrism(env.IP_PRISM_URL, env.IP_PRISM_KEY, ip);
-              if (prismRes.success) {
+              let prismRes: any = null;
+              try {
+                const cached = await env.MAILPROBE_KV.get(ipCacheKey);
+                if (cached) {
+                  prismRes = JSON.parse(cached);
+                }
+              } catch (err) {
+                console.warn("Failed to read IP cache:", err);
+              }
+
+              if (!prismRes) {
+                prismRes = await lookupIpWithPrism(env.IP_PRISM_URL, env.IP_PRISM_KEY, ip);
+                if (prismRes.success) {
+                  try {
+                    // 缓存解析结果 24 小时（86400 秒），防止重复请求与网络抖动导致定位不一致
+                    await env.MAILPROBE_KV.put(ipCacheKey, JSON.stringify(prismRes), { expirationTtl: 86400 });
+                  } catch (err) {
+                    console.warn("Failed to write IP cache:", err);
+                  }
+                }
+              }
+
+              if (prismRes && prismRes.success) {
                 if (prismRes.country) country = prismRes.country;
                 if (prismRes.region) region = prismRes.region;
                 if (prismRes.city) city = prismRes.city;

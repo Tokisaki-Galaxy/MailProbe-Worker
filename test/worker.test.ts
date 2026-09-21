@@ -620,4 +620,102 @@ describe("MailProbe-Worker 全功能测试", () => {
     expect(resolved.primaryLocation).toBe("北京市");
     expect(resolved.compactComparison).toContain("纯真");
   });
+
+  it("should retry ip-prism lookup on first failure and succeed on second attempt", async () => {
+    let callCount = 0;
+    const fetchMock = vi.fn(async (url: any) => {
+      callCount++;
+      if (callCount === 1) {
+        throw new Error("Network timeout");
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          ip: "1.1.1.1",
+          best: { city: { value: "RetryCity" } },
+          sources: { cz88: { ok: true, region: "中国–重试–成功" } }
+        })
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await lookupIpWithPrism("https://ip-prism.mock", "test-key", "1.1.1.1");
+    expect(res.success).toBe(true);
+    expect(callCount).toBe(2);
+    expect(res.city).toBe("RetryCity");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("should cache IP lookup in KV for 24h and bypass external lookup on repeat access", async () => {
+    const mockKV = createMockKV();
+    const probeId = "probe_cache_test";
+    const testIp = "202.108.22.5";
+
+    // 预置 probe
+    await mockKV.put(`probe:${probeId}`, JSON.stringify({
+      filename: "cache.png",
+      note: "Cache Test",
+      contentType: "image/png"
+    }));
+
+    let prismCallCount = 0;
+    const fetchMock = vi.fn(async (url: any) => {
+      const urlStr = String(url);
+      if (urlStr.includes("ip-prism")) {
+        prismCallCount++;
+        return {
+          ok: true,
+          json: async () => ({
+            ip: testIp,
+            best: { city: { value: "CachedCity" } },
+            sources: { cz88: { ok: true, region: "中国–缓存–测试" } }
+          })
+        };
+      }
+      return { ok: true, text: async () => '{"errcode":0}' };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env: Env = {
+      MAILPROBE_KV: mockKV as any,
+      MAILPROBE_R2: createMockR2() as any,
+      DINGTALK_WEBHOOK: "https://oapi.dingtalk.com/robot/send?access_token=test",
+      IP_PRISM_URL: "https://ip-prism.mock",
+      IP_PRISM_KEY: "test-key"
+    };
+
+    const makeReq = () => new Request(`https://mailprobe.dev/i/${probeId}.png`, {
+      headers: {
+        "CF-Connecting-IP": testIp,
+        "User-Agent": "TestAgent/1.0"
+      }
+    });
+
+    // 第一次访问：调用 ip-prism
+    const waitUntilMock1 = vi.fn();
+    await worker.fetch(makeReq(), env, { waitUntil: waitUntilMock1 } as any);
+    await waitUntilMock1.mock.calls[0][0];
+    expect(prismCallCount).toBe(1);
+
+    // 验证 KV 写入了 ipcache
+    const cachedIp = await mockKV.get(`ipcache:${testIp}`);
+    expect(cachedIp).not.toBeNull();
+    expect(JSON.parse(cachedIp!).city).toBe("CachedCity");
+
+    // 第二次访问（不同设备指纹，但相同 IP）：应走 KV 缓存，不应调用 ip-prism
+    const waitUntilMock2 = vi.fn();
+    const req2 = new Request(`https://mailprobe.dev/i/${probeId}.png`, {
+      headers: {
+        "CF-Connecting-IP": testIp,
+        "User-Agent": "AnotherAgent/2.0"
+      }
+    });
+    await worker.fetch(req2, env, { waitUntil: waitUntilMock2 } as any);
+    await waitUntilMock2.mock.calls[0][0];
+
+    expect(prismCallCount).toBe(1); // 未发起第二次外部请求
+
+    vi.unstubAllGlobals();
+  });
 });

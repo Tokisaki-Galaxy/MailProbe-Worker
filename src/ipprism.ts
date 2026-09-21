@@ -199,44 +199,60 @@ export async function lookupIpWithPrism(
   const cleanBase = baseUrl.replace(/\/+$/, "");
   const targetUrl = `${cleanBase}/v1/lookup?ip=${encodeURIComponent(ip)}`;
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2秒超时快速保护
+  // 增加自动重试 1 次（最多请求 2 次），超时放宽至 4000ms（在 waitUntil 异步后台无感执行）
+  const maxAttempts = 2;
+  const timeoutMs = 4000;
 
-    const res = await fetch(targetUrl, {
-      method: "GET",
-      headers: {
-        "X-API-Key": apiKey,
-        "User-Agent": "MailProbe-Worker/1.0"
-      },
-      signal: controller.signal
-    });
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    clearTimeout(timeoutId);
+      const res = await fetch(targetUrl, {
+        method: "GET",
+        headers: {
+          "X-API-Key": apiKey,
+          "User-Agent": "MailProbe-Worker/1.0"
+        },
+        signal: controller.signal
+      });
 
-    if (!res.ok) {
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        if (attempt < maxAttempts) {
+          await new Promise(r => setTimeout(r, 200));
+          continue;
+        }
+        return { success: false };
+      }
+
+      const data = (await res.json()) as IpPrismResult;
+      const country = data.best?.country?.value || "";
+      const region = data.best?.region?.value || "";
+      const city = data.best?.city?.value || "";
+      const isp = data.best?.isp?.value || "";
+      const bestLoc = [country, region, city].filter(Boolean).join(" · ");
+      const location = bestLoc || data.summary || "";
+      const providers = extractProvidersFromPrism(data);
+
+      return {
+        success: true,
+        location: location || undefined,
+        country: country || undefined,
+        region: region || undefined,
+        city: city || undefined,
+        isp: isp || undefined,
+        providers: providers.length > 0 ? providers : undefined
+      };
+    } catch (err) {
+      if (attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, 200));
+        continue;
+      }
       return { success: false };
     }
-
-    const data = (await res.json()) as IpPrismResult;
-    const country = data.best?.country?.value || "";
-    const region = data.best?.region?.value || "";
-    const city = data.best?.city?.value || "";
-    const isp = data.best?.isp?.value || "";
-    const bestLoc = [country, region, city].filter(Boolean).join(" · ");
-    const location = bestLoc || data.summary || "";
-    const providers = extractProvidersFromPrism(data);
-
-    return {
-      success: true,
-      location: location || undefined,
-      country: country || undefined,
-      region: region || undefined,
-      city: city || undefined,
-      isp: isp || undefined,
-      providers: providers.length > 0 ? providers : undefined
-    };
-  } catch (err) {
-    return { success: false };
   }
+
+  return { success: false };
 }
